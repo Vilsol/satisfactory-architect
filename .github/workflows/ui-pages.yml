@@ -39,9 +39,10 @@ jobs:
       - name: Build
         working-directory: ui
         env:
-          # Which collaboration server this build talks to. Leave the variable unset to
-          # fall back to "same host as the page", which a static host cannot serve.
-          VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
+          # Which collaboration server this build talks to. A static host cannot serve
+          # the websocket itself, so it has to be named here; the repository variable
+          # overrides it for a deployment that lives somewhere else.
+          VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL || 'wss://satisfactory-architect-backend.vil.so/ws' }}
         run: npm run build
 
       # Pages decides production purely by branch name: a deployment is production when
