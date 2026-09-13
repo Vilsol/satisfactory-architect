@@ -46,19 +46,40 @@ jobs:
 
       # Pages decides production purely by branch name: a deployment is production when
       # the branch it names is the project's production branch, and a preview otherwise.
-      # There is no flag for it. So a push to master deploys under whatever name the
-      # project calls production, and every other branch deploys under its own.
-      - name: Work out which branch to deploy as
+      # There is no flag for it, and no error if the name does not match - the deploy
+      # succeeds and quietly lands on a preview URL.
+      #
+      # So rather than assume what the project calls production, ask it.
+      - name: Ask the project which branch is production
         id: target
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: ${{ vars.CF_PAGES_PROJECT || 'satisfactory-architect' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          production_branch="${{ vars.CF_PAGES_PRODUCTION_BRANCH || 'master' }}"
-          if [ "${GITHUB_REF_NAME}" = "master" ]; then
-            echo "branch=${production_branch}" >> "$GITHUB_OUTPUT"
-            echo "Deploying to production as '${production_branch}'"
-          else
+          set -euo pipefail
+
+          if [ "${GITHUB_REF_NAME}" != "${DEFAULT_BRANCH}" ]; then
             echo "branch=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-            echo "Deploying as a preview of '${GITHUB_REF_NAME}'"
+            echo "Preview of '${GITHUB_REF_NAME}'."
+            exit 0
           fi
+
+          production=$(curl -sf \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${PROJECT}" \
+            | jq -r ".result.production_branch // empty") || true
+
+          if [ -z "${production}" ]; then
+            echo "::error::Could not read the production branch of Pages project '${PROJECT}'." \
+              "The API token needs read access to Pages. Refusing to deploy, because deploying" \
+              "under the wrong name would silently publish to a preview URL instead."
+            exit 1
+          fi
+
+          echo "branch=${production}" >> "$GITHUB_OUTPUT"
+          echo "Production. The project calls its production branch '${production}'."
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v3
