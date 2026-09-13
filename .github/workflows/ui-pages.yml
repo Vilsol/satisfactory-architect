@@ -44,11 +44,26 @@ jobs:
           VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
         run: npm run build
 
+      # Pages decides production purely by branch name: a deployment is production when
+      # the branch it names is the project's production branch, and a preview otherwise.
+      # There is no flag for it. So a push to master deploys under whatever name the
+      # project calls production, and every other branch deploys under its own.
+      - name: Work out which branch to deploy as
+        id: target
+        run: |
+          production_branch="${{ vars.CF_PAGES_PRODUCTION_BRANCH || 'master' }}"
+          if [ "${GITHUB_REF_NAME}" = "master" ]; then
+            echo "branch=${production_branch}" >> "$GITHUB_OUTPUT"
+            echo "Deploying to production as '${production_branch}'"
+          else
+            echo "branch=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "Deploying as a preview of '${GITHUB_REF_NAME}'"
+          fi
+
       - name: Deploy
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Anything other than the default branch lands as a Pages preview.
-          command: pages deploy build --project-name=${{ vars.CF_PAGES_PROJECT || 'satisfactory-architect' }} --branch=${{ github.ref_name }}
+          command: pages deploy build --project-name=${{ vars.CF_PAGES_PROJECT || 'satisfactory-architect' }} --branch=${{ steps.target.outputs.branch }}
           workingDirectory: ui
