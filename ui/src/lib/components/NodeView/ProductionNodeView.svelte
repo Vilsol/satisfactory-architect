@@ -4,7 +4,7 @@
 	import SfIconView from "../SFIconView.svelte";
 	import SvgInput from "../SvgInput.svelte";
 	import { floatToString, parseFloatExpr } from "$lib/utilties";
-	import { globals } from "../../datamodel/globals.svelte";
+	import { settings } from "$lib/settings.svelte";
 	import type { GraphNode, GraphNodeProductionProperties } from "../../datamodel/GraphNode.svelte";
 
 	interface Props {
@@ -130,7 +130,7 @@
 			</div>
 		</foreignObject>
 	{/if}
-	{#if globals.debugShowNodeIds}
+	{#if settings.debugShowNodeIds.value}
 		<text
 			x="0"
 			y="-15"

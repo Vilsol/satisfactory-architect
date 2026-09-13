@@ -1,4 +1,5 @@
 import { gridSize } from "./constants";
+import { settings } from "$lib/settings.svelte";
 import type { IVector2D, GraphViewJson } from "../../../../server/shared/types_serialization";
 
 export type { IVector2D };
@@ -17,7 +18,7 @@ export class GraphView {
 	}
 
 	static newDefault(): GraphView {
-		return new GraphView({ x: 0, y: 0 }, 1, true);
+		return new GraphView({ x: 0, y: 0 }, 1, settings.defaultGridSnap.value);
 	}
 
 	static fromJSON(json: GraphViewJson): GraphView {

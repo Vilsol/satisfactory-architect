@@ -163,6 +163,8 @@ describe("CollaborationClient", () => {
 				cursor: { x: 100, y: 200 },
 				currentPageId: "page-1",
 				localIdCounter: "0",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			};
 
 			client.updateFromHeartbeat(message);
@@ -177,6 +179,8 @@ describe("CollaborationClient", () => {
 				cursor: { x: 0, y: 0 },
 				currentPageId: null,
 				localIdCounter: "500",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			};
 
 			client.updateFromHeartbeat(message);
@@ -190,6 +194,8 @@ describe("CollaborationClient", () => {
 				cursor: { x: 0, y: 0 },
 				currentPageId: null,
 				localIdCounter: "0",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			};
 
 			// Advance time partway through timeout period
@@ -259,6 +265,8 @@ describe("CollaborationClient", () => {
 				cursor: { x: 50, y: 75 },
 				currentPageId: "page-2",
 				localIdCounter: "100",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			};
 
 			client.updateFromHeartbeat(message);
@@ -362,6 +370,8 @@ describe("CollaborationClient", () => {
 				cursor: { x: 0, y: 0 },
 				currentPageId: null,
 				localIdCounter: "0",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			};
 			client.updateFromHeartbeat(message);
 
@@ -425,6 +435,8 @@ describe("CollaborationClient", () => {
 				cursor: { x: 0, y: 0 },
 				currentPageId: null,
 				localIdCounter: "0",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			};
 
 			// Send many heartbeats in quick succession

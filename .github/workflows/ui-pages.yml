@@ -1,0 +1,54 @@
+name: UI to Cloudflare Pages
+
+on:
+  push:
+    paths:
+      - "ui/**"
+      - "server/shared/**"
+      - ".github/workflows/ui-pages.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      # The UI type-checks against server/shared, so the whole repo has to be here.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install
+        working-directory: ui
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: ui
+        run: npm run check
+
+      - name: Test
+        working-directory: ui
+        run: npm test
+
+      - name: Build
+        working-directory: ui
+        env:
+          # Which collaboration server this build talks to. Leave the variable unset to
+          # fall back to "same host as the page", which a static host cannot serve.
+          VITE_SERVER_URL: ${{ vars.VITE_SERVER_URL }}
+        run: npm run build
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Anything other than the default branch lands as a Pages preview.
+          command: pages deploy build --project-name=${{ vars.CF_PAGES_PROJECT || 'satisfactory-architect' }} --branch=${{ github.ref_name }}
+          workingDirectory: ui

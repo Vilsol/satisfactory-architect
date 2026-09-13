@@ -3,9 +3,10 @@ import type { AppState } from "$lib/datamodel/AppState.svelte";
 import { globals } from "$lib/datamodel/globals.svelte";
 import type { Id, IdGen } from "$lib/datamodel/IdGen.svelte.js";
 import { watchState } from "$lib/utilities.svelte";
+import { cleanUserName, displayIdentity, userColor, userName } from "$lib/datamodel/userIdentity.svelte";
 import { assertUnreachable, Throttler } from "$lib/utilties";
 import { tick } from "svelte";
-import { type ClientMessage, type RoomListItem, type ServerMessage, type WelcomeMessage, type UploadConfirmationMessage, type RoomJoinedMessage, type CommandBatchMessage, type HeartbeatResponseMessage, type ErrorMessage, type CursorPosition, type ClientPresence, type Command, ErrorCode } from "../../../../server/shared/messages";
+import { type ClientMessage, type RoomListItem, type ServerMessage, type WelcomeMessage, type UploadConfirmationMessage, type RoomJoinedMessage, type CommandBatchMessage, type HeartbeatResponseMessage, type ErrorMessage, type CursorPosition, type ClientPresence, type UserSelection, type Command, ErrorCode } from "../../../../server/shared/messages";
 import { WebSocketMessageMiddleware } from "../../../../server/shared/WebSocketMessageMiddleware";
 import { CommandProcessor } from "./CommandProcessor";
 import { DispatchCommandQueue } from "./DispatchCommandQueue";
@@ -53,6 +54,35 @@ export class ServerConnection {
 	public get lastError() { return this._lastError; }
 	private _otherClients: ClientPresence[] = $state([]);
 	public get otherClients() { return this._otherClients; }
+	/**
+	 * Who else has each node and edge picked out, so it can be outlined in their
+	 * colour. Ids are unique across the whole save, so there is no need to know which
+	 * page is being drawn.
+	 */
+	private _remoteSelection = $derived.by(() => {
+		const nodes = new Map<string, { name: string; color: string }>();
+		const edges = new Map<string, { name: string; color: string }>();
+		for (const client of this._otherClients) {
+			if (client.userId === this._ownUserId) {
+				continue;
+			}
+			const shown = displayIdentity(client.userId, client.identity);
+			for (const id of client.selection?.nodeIds ?? []) {
+				if (!nodes.has(id)) nodes.set(id, shown);
+			}
+			for (const id of client.selection?.edgeIds ?? []) {
+				if (!edges.has(id)) edges.set(id, shown);
+			}
+		}
+		return { nodes, edges };
+	});
+	public get remoteSelection() { return this._remoteSelection; }
+
+	/** Name and colour for a user id, whether or not they have set either. */
+	public identityOf(userId: string): { name: string; color: string } {
+		const client = this._otherClients.find(c => c.userId === userId);
+		return displayIdentity(userId, client?.identity);
+	}
 
 	private ws: WebSocket | null = null;
 	private wsCompressionMiddleware: WebSocketMessageMiddleware;
@@ -76,7 +106,7 @@ export class ServerConnection {
 	onUserMessage: ((message: string) => void) | null = null;
 
 	constructor(
-		appState: AppState,
+		private appState: AppState,
 		private getCurrentPageId: () => string | null,
 		private onStateDownloaded: (state: any) => void,
 	) {
@@ -97,7 +127,13 @@ export class ServerConnection {
 			() => this._ownUserId!,
 		);
 
-		if (browser && !location.origin.includes("localhost:")) {
+		// A build can name the server it belongs to. Without one the server is assumed to
+		// sit behind the same host as the page, which is true of the official deployment
+		// but not of a static host that only serves files.
+		const builtWithServerUrl = import.meta.env.VITE_SERVER_URL;
+		if (builtWithServerUrl) {
+			this._serverUrl = builtWithServerUrl;
+		} else if (browser && !location.origin.includes("localhost:")) {
 			this._serverUrl = location.origin.replace(/^http/, "ws") + "/ws";
 		}
 
@@ -114,6 +150,9 @@ export class ServerConnection {
 				globals.pageMousePosition?.x,
 				globals.pageMousePosition?.y,
 				this.getCurrentPageId(),
+				userName.value,
+				userColor.value,
+				JSON.stringify(this.getSelection()),
 			],
 			guard: () => this.stateMachine.currentState === ServerConnectionState.InRoom,
 			onChange: () => this.onHeartbeatDataChanged(),
@@ -418,7 +457,24 @@ export class ServerConnection {
 			cursor: pageMousePosition ?? { x: 0, y: 0 },
 			currentPageId: this.getCurrentPageId(),
 			localIdCounter: this.idGen.getCurrentId(),
+			identity: { name: cleanUserName(userName.value), color: userColor.value },
+			selection: this.getSelection(),
 		});
+	}
+
+	/**
+	 * What this person currently has picked out, for other people to see. Selection is
+	 * presence, not an edit, so it rides the heartbeat instead of the command stream.
+	 */
+	private getSelection(): UserSelection {
+		const page = this.appState.pages.find(p => p.id === this.getCurrentPageId());
+		if (!page) {
+			return { nodeIds: [], edgeIds: [] };
+		}
+		return {
+			nodeIds: Array.from(page.selectedNodes),
+			edgeIds: Array.from(page.selectedEdges),
+		};
 	}
 
 	private clearHeartbeat(): void {

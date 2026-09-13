@@ -1,5 +1,8 @@
 
 :root {
+	/* Height of the properties bar, including its border. Anything floating over
+	   the page uses this to sit clear of it. */
+	--properties-toolbar-height: 31px;
 	--rounded-border-radius: 4px;
 	--rounded-border-radius-big: 8px;
 	--rounded-border-width: 2px;
@@ -32,6 +35,7 @@
 	--secondary: #efc0a9;
 	--underflow-color: #E14434;
 	--overflow-color: #3D74B6;
+	--over-capacity-color: #8E3FD4;
 	--edge-drag-handle-color: var(--primary);
 
 	--grid-background-color: var(--background);
@@ -149,6 +153,7 @@
 	--secondary: #562710;
 	--underflow-color: #E14434;
 	--overflow-color: #3D74B6;
+	--over-capacity-color: #C792FF;
 
 	--grid-background-color: var(--background);
 	--selection-area-background-color: color-mix(in srgb, var(--primary) 15%, transparent);

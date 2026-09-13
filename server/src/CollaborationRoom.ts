@@ -1,3 +1,4 @@
+import type { TimerId } from "./utils/Scheduler.ts";
 /**
  * Room management and client coordination
  */
@@ -53,8 +54,8 @@ export interface RoomDependencies {
 export class CollaborationRoom {
 	private clients = new Map<string, ICollaborationClient>(); // Keyed by socketId
 	private nextUserNumber = 1;
-	private snapshotTimer: number | null = null;
-	private heartbeatTimer: number | null = null;
+	private snapshotTimer: TimerId | null = null;
+	private heartbeatTimer: TimerId | null = null;
 	private nextHeartbeatTime: number = 0;
 	private roomState: IRoomState;
 	private commandBuffer: ICommandBuffer;
@@ -325,6 +326,8 @@ export class CollaborationRoom {
 				userId: client.userId,
 				cursor: client.cursor,
 				currentPageId: client.currentPageId,
+				identity: client.identity,
+				selection: client.selection,
 			}),
 		);
 

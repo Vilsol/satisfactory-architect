@@ -29,8 +29,12 @@ export class GraphEdge implements JsonSerializable<PageContext> {
 	get startNodeId(): Id { return this._startNodeId; }
 	get endNodeId(): Id { return this._endNodeId; }
 	readonly properties: GraphEdgeProperties;
-	pushThroughput: number;
-	pullThroughput: number;
+	/** How much actually travels along this belt. */
+	flow: number;
+	/** Worst shortage at anything this belt feeds, for colouring. */
+	shortfallAhead: number;
+	/** Worst unshipped surplus behind this belt, for colouring. */
+	surplusBehind: number;
 	readonly asJson: any;
 
 	readonly startNode: GraphNode|undefined;
@@ -64,8 +68,9 @@ export class GraphEdge implements JsonSerializable<PageContext> {
 		this._startNodeId = $state(startNodeId);
 		this._endNodeId = $state(endNodeId);
 		this.properties = $state(properties);
-		this.pushThroughput = $state(0);
-		this.pullThroughput = $state(0);
+		this.flow = $state(0);
+		this.shortfallAhead = $state(0);
+		this.surplusBehind = $state(0);
 		this.asJson = $derived(this.toJSON());
 		
 		this.startNode = $derived(this.context.page.nodes.get(this.startNodeId));

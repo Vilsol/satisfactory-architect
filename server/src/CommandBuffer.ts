@@ -3,6 +3,7 @@
  */
 
 import type { Command } from "../shared/messages.ts";
+import type { TimerId } from "./utils/Scheduler.ts";
 
 export interface CommandBufferConfig {
 	bufferTimeMs: number; // How long to buffer commands (50ms default)
@@ -25,7 +26,7 @@ export interface ICommandBuffer {
  */
 export class CommandBuffer implements ICommandBuffer {
 	private buffer: Command[] = [];
-	private flushTimer: number | null = null;
+	private flushTimer: TimerId | null = null;
 
 	constructor(
 		private config: CommandBufferConfig,

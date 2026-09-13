@@ -4,9 +4,9 @@
 	import SfIconView from "../SFIconView.svelte";
 	import EdgeAnnotation from "../EdgeAnnotation.svelte";
 	import { getNodeRadius, isNodeSelectable } from "../../datamodel/nodeTypeProperties.svelte";
-	import { globals } from "../../datamodel/globals.svelte";
+	import { settings } from "$lib/settings.svelte";
 	import SvgInput from "../SvgInput.svelte";
-	import { assertUnreachable, floatToString, getThroughputColor, isThroughputBalanced, parseFloatExpr } from "$lib/utilties";
+	import { assertUnreachable, floatToString, getSlackColor, isThroughputBalanced, parseFloatExpr } from "$lib/utilties";
 	import type { GraphNode, GraphNodeProductionProperties, GraphNodeResourceJointProperties } from "../../datamodel/GraphNode.svelte";
 	import type { Id } from "../../datamodel/IdGen.svelte";
 
@@ -109,29 +109,24 @@
 		if (node.edges.size === 0) {
 			return fallback;
 		}
-		let totalPushed = 0;
-		let totalPulled = 0;
+		let total = 0;
 		for (const edgeId of node.edges.values()) {
 			const edge = page.edges.get(edgeId);
 			if (edge === undefined) {
 				continue;
 			}
-			totalPushed += edge.pushThroughput;
-			totalPulled += edge.pullThroughput;
+			total += edge.flow;
 		}
-		
-		let suggestedThroughput: number;
-		if (node.properties.jointType === "input") {
-			suggestedThroughput = totalPushed;
-		} else if (node.properties.jointType === "output") {
-			suggestedThroughput = totalPulled;
-		} else {
-			assertUnreachable(node.properties.jointType);
-		}
+
+		// The point of the suggestion is to offer the rate that matches THE OTHER SIDE,
+		// so an over-supplied consumer can be scaled up to swallow what it is being
+		// given, not just a producer scaled down. What actually flows is the smaller of
+		// the two and so would only ever offer scaling down.
+		const suggestedThroughput = node.balanceTarget;
 		if (isThroughputBalanced(suggestedThroughput, productionRate ?? 0)) {
 			return fallback;
 		}
-		const throughputColor = getThroughputColor(false, totalPushed, totalPulled);
+		const throughputColor = getSlackColor(node.shortfall, node.surplus, total);
 		return { suggestedThroughput, throughputColor };
 	});
 
@@ -157,6 +152,21 @@
 		}
 	});
 	const suggestionAlign = $derived(node.properties.jointType === "input" ? "right" : "left");
+
+	/**
+	 * How much this joint is short of, or has spare. Worked out by the calculation and
+	 * otherwise only used to tint things - showing the figure saves the reader working
+	 * it out from two other numbers.
+	 */
+	const slack = $derived.by(() => {
+		if (node.shortfall > 0) {
+			return { text: `-${floatToString(node.shortfall, 3)}`, color: "var(--underflow-color)" };
+		}
+		if (node.surplus > 0) {
+			return { text: `+${floatToString(node.surplus, 3)}`, color: "var(--overflow-color)" };
+		}
+		return null;
+	});
 
 	
 	function onProductionRateChange(value: string, isEnter: boolean) {
@@ -207,7 +217,17 @@
 			onClick={() => setProductionRate(suggestedThroughput)}
 		/>
 	{/if}
-	{#if globals.debugShowNodeIds}
+	{#if slack}
+		<EdgeAnnotation
+			x={suggestionX}
+			y={-outerRadius / 2 - 19.5}
+			text={slack.text}
+			color={slack.color}
+			align={suggestionAlign}
+			fontSize={8}
+		/>
+	{/if}
+	{#if settings.debugShowNodeIds.value}
 		<text
 			x="0"
 			y="-10"

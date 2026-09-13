@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getContext, onDestroy, onMount } from "svelte";
 	import UserEvents, { type CursorEvent, type DragEvent } from "../UserEvents.svelte";
+	import { jointRate, machinesToMatch } from "../../datamodel/jointRates";
 	import { isNodeSelectable, isNodeDraggable, isNodeDeletable, getNodeRadius, isResourceNodeSplittable } from "../../datamodel/nodeTypeProperties.svelte";
 	import ResourceJointNodeView from "./ResourceJointNodeView.svelte";
 	import type { ContextMenuItem, EventStream } from "$lib/EventStream.svelte";
@@ -9,7 +10,8 @@
 	import ProductionNodeView from "./ProductionNodeView.svelte";
 	import SplitterMergerNodeView from "./SplitterMergerNodeView.svelte";
 	import type { GraphNode, GraphNodeProductionProperties, GraphNodeResourceJointProperties, GraphNodeSplitterMergerProperties, GraphNodeTextNoteProperties, JointDragType } from "../../datamodel/GraphNode.svelte";
-	import { blockStateChanges, globals, unblockStateChanges } from "../../datamodel/globals.svelte";
+	import { blockStateChanges, unblockStateChanges } from "../../datamodel/globals.svelte";
+	import { settings } from "$lib/settings.svelte";
 	import TextNoteNodeView from "./TextNoteNodeView.svelte";
 	import { type ServerConnection } from "$lib/sync/ServerConnection.svelte";
 	
@@ -32,6 +34,35 @@
 	const isResourceSplittable = isResourceNodeSplittable(node);
 	
 	const position = $derived(node.getAbsolutePosition(page));
+	/**
+	 * Set when somebody else in the room has this node picked out, or is part-way
+	 * through pulling a new belt out of it - both are worth showing to everyone else.
+	 */
+	const remoteSelector = $derived.by(() => {
+		const picked = serverConnection.remoteSelection.nodes.get(node.id);
+		if (picked) {
+			return picked;
+		}
+		const draggerId = page.dragHighlightsByUser.nodes.get(node.id);
+		if (draggerId && draggerId !== serverConnection.ownUserId) {
+			return serverConnection.identityOf(draggerId);
+		}
+		return undefined;
+	});
+	/**
+	 * The outline has to follow whichever shape the node actually is. Joints, splitters
+	 * and mergers are round; buildings and notes are rectangles drawn from their size,
+	 * and have no radius at all - asking for one gives zero.
+	 */
+	const remoteRingRadius = $derived(getNodeRadius(node));
+	/**
+	 * Notes only get a size once they have been laid out and measured, so fall back to
+	 * something visible rather than drawing an outline with no area on the first frame.
+	 */
+	const remoteRingSize = $derived({
+		x: Math.max(node.size.x, 24),
+		y: Math.max(node.size.y, 24),
+	});
 	
 	const isMovingResourceJoint = node.properties.type === "resource-joint" && node.properties.jointDragType !== undefined;
 	const jointDragType = isMovingResourceJoint ? node.properties.jointDragType! : null;
@@ -141,7 +172,7 @@
 					onClick: () => {
 						const properties = node.properties as GraphNodeProductionProperties;
 						properties.autoMultiplier = !properties.autoMultiplier;
-						globals.useAutoRateForFactoryInOutput = properties.autoMultiplier;
+						settings.autoRateForFactoryIo.value = properties.autoMultiplier;
 					},
 				});
 			}
@@ -390,6 +421,13 @@
 								edge.connectNode(destJoint, "end", page);
 							}
 						}
+						// Size the new building so the joint it was just connected to runs at
+						// the same rate as the one it was dragged out of, instead of always
+						// arriving as a single machine.
+						const machines = machinesToMatch(page, destJoint, jointRate(page, originalNode));
+						if (machines !== null && newNode.properties.type === "production") {
+							newNode.properties.multiplier = machines;
+						}
 						node.edges.clear();
 						page.removeNode(node.id);
 						for (let i = 0; i < 5; i++) {
@@ -503,7 +541,25 @@
 			transform={`translate(${position.x}, ${position.y})`}
 			data-node-id={node.id}
 			data-node-type={node.properties.type}
+			class:picked-by-someone-else={Boolean(remoteSelector)}
+			style={remoteSelector ? `--remote-select-color: ${remoteSelector.color};` : undefined}
 		>
+			{#if remoteSelector}
+				{#if remoteRingRadius > 0}
+					<circle class="remote-selection-ring" r={remoteRingRadius + 5} />
+				{:else}
+					<rect
+						class="remote-selection-ring"
+						x={-remoteRingSize.x / 2 - 5}
+						y={-remoteRingSize.y / 2 - 5}
+						width={remoteRingSize.x + 10}
+						height={remoteRingSize.y + 10}
+						rx={8}
+						ry={8}
+					/>
+				{/if}
+				<title>Selected by {remoteSelector.name}</title>
+			{/if}
 			{#if node.properties.type === "production"}
 				<ProductionNodeView node={node as GraphNode<GraphNodeProductionProperties>} />
 			{:else if node.properties.type === "resource-joint"}
@@ -524,3 +580,16 @@
 		</g>
 	{/snippet}
 </UserEvents>
+
+<style lang="scss">
+	// Somebody else in the room has this picked out. Their own colour, dashed so it
+	// reads differently from your own selection.
+	.remote-selection-ring {
+		fill: none;
+		stroke: var(--remote-select-color);
+		stroke-width: 2;
+		stroke-dasharray: 4 3;
+		pointer-events: none;
+		opacity: 0.9;
+	}
+</style>

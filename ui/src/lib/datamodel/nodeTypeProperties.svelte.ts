@@ -1,3 +1,4 @@
+import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
 import type { GraphEdge } from "./GraphEdge.svelte";
 import type { GraphNodeType, GraphNode } from "./GraphNode.svelte";
 import { resourceJointNodeRadius, splitterMergerNodeRadius } from "./constants";
@@ -57,4 +58,42 @@ export function userCanChangeOrientationVector(node: GraphNode, edge: GraphEdge)
 export function getNodeRadius(node: GraphNode): number {
 	const radius = nodeRadius[node.properties.type];
 	return radius ?? 0;
+}
+
+/** A name a person would recognise, for listing nodes in a search. */
+export function nodeDisplayName(node: GraphNode): string {
+	const props = node.properties;
+	switch (props.type) {
+		case "text-note":
+			return props.content.split("\n")[0].slice(0, 60) || "Note";
+		case "splitter":
+			return `Splitter (${satisfactoryDatabase.parts[props.resourceClassName]?.displayName ?? props.resourceClassName})`;
+		case "merger":
+			return `Merger (${satisfactoryDatabase.parts[props.resourceClassName]?.displayName ?? props.resourceClassName})`;
+		case "resource-joint":
+			return satisfactoryDatabase.parts[props.resourceClassName]?.displayName ?? props.resourceClassName;
+		case "production": {
+			const details = props.details;
+			switch (details.type) {
+				case "recipe":
+					return satisfactoryDatabase.recipes[details.recipeClassName]?.recipeDisplayName ?? details.recipeClassName;
+				case "extraction":
+					return `${satisfactoryDatabase.parts[details.partClassName]?.displayName ?? details.partClassName} (${satisfactoryDatabase.buildings[details.buildingClassName]?.displayName ?? "Extractor"})`;
+				case "factory-input":
+					return `Input: ${satisfactoryDatabase.parts[details.partClassName]?.displayName ?? details.partClassName}`;
+				case "factory-output":
+					return `Output: ${satisfactoryDatabase.parts[details.partClassName]?.displayName ?? details.partClassName}`;
+				case "power-production":
+					return satisfactoryDatabase.powerProducers[details.powerBuildingClassName]
+						? `${satisfactoryDatabase.buildings[details.powerBuildingClassName]?.displayName ?? details.powerBuildingClassName}`
+						: details.powerBuildingClassName;
+				case "factory-reference":
+					return "Factory reference";
+				default:
+					return "Building";
+			}
+		}
+		default:
+			return "Node";
+	}
 }

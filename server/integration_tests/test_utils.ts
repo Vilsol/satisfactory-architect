@@ -1,3 +1,4 @@
+import type { TimerId } from "../src/utils/Scheduler.ts";
 
 import type {
 	ClientMessage,
@@ -49,7 +50,10 @@ export class TestServer {
 			if (done) break;
 			const chunk = decoder.decode(value);
 			output += chunk;
-			if (output.includes("Collaboration server starting")) {
+			// Wait for the line the listener itself prints once it is bound. The
+			// "starting" line above it is written well before that, so waiting on it
+			// means connecting to a port nothing is listening on yet.
+			if (output.includes("WebSocket Server is running")) {
 				break;
 			}
 		}
@@ -75,7 +79,7 @@ export class TestServer {
 export class TestClient {
 	private ws: WebSocket | null = null;
 	private messageQueue: ServerMessage[] = [];
-	private heartbeatInterval: number | null = null;
+	private heartbeatInterval: TimerId | null = null;
 	public socketId: string = "";
 
 	constructor(private port: number) {}
@@ -161,6 +165,8 @@ export class TestClient {
 				cursor: { x: 0, y: 0 },
 				currentPageId: null,
 				localIdCounter: "0",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			});
 		}, intervalMs);
 	}

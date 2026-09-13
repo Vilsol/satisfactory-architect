@@ -27,6 +27,18 @@ import { applyDiffToJson } from "../shared/objectDiff.ts";
 /**
  * Room state interface for dependency injection
  */
+
+/**
+ * The number in an id counter, or null if there is not one.
+ *
+ * Clients in a room prefix their ids with a name of their own ("b-400"), so the counter
+ * that comes back may carry a prefix. Mirrors IdGen.parseId on the client.
+ */
+function parseIdCounter(counter: string): number | null {
+	const digits = counter.includes("-") ? counter.split("-")[1] : counter;
+	const value = Number(digits);
+	return Number.isFinite(value) ? value : null;
+}
 export interface IRoomState {
 	isStateInitialized(): boolean;
 	canSetState(): boolean;
@@ -76,7 +88,12 @@ export class RoomState implements IRoomState {
 	}
 
 	/**
-	 * Update the highest ID counter seen from a client heartbeat
+	 * Update the highest ID counter seen from a client heartbeat.
+	 *
+	 * Every client reports its own counter on every heartbeat, and clients that have
+	 * created nothing report low ones. Taking whatever arrived last would hand the next
+	 * client to join a counter that has already been used, and it would then issue ids
+	 * belonging to nodes that already exist. Only ever move it up.
 	 */
 	public updateIdCounter(localIdCounter: string): void {
 		if (!this.state) {
@@ -87,7 +104,16 @@ export class RoomState implements IRoomState {
 			);
 		}
 
-		this.state.idGen = localIdCounter;
+		const incoming = parseIdCounter(localIdCounter);
+		if (incoming === null) {
+			return;
+		}
+		const current = parseIdCounter(this.state.idGen) ?? -1;
+		if (incoming <= current) {
+			return;
+		}
+
+		this.state.idGen = incoming.toString();
 		this.hasChanged = true;
 	}
 

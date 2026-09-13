@@ -1,4 +1,5 @@
 <script lang="ts">
+	import IdentitySettings from "./IdentitySettings.svelte";
 	import { ServerConnectionState } from "$lib/sync/ServerConnection.svelte";
 	import type { ShowConnectionOverlayEvent, EventStream } from "$lib/EventStream.svelte";
 	import { getContext, onMount, onDestroy, untrack } from "svelte";
@@ -6,7 +7,7 @@
 	import { LocalStorageState } from "$lib/localStorageState.svelte";
 	import { assertUnreachable, copyText } from "$lib/utilties";
 	import { fade } from "svelte/transition";
-	import { globals } from "$lib/datamodel/globals.svelte";
+	import { settings } from "$lib/settings.svelte";
 	import PresetSvg from "$lib/components/icons/PresetSvg.svelte";
 
 	interface Props {
@@ -406,6 +407,8 @@
 		</div>
 
 		<div class="overlay-content">
+			<IdentitySettings ownUserId={serverConnection.ownUserId} />
+
 			<div class="field">
 				<label for="room-name">Room Name</label>
 				<input 
@@ -435,7 +438,7 @@
 				<label>
 					<input 
 						type="checkbox" 
-						bind:checked={globals.showOtherCursors}
+						bind:checked={settings.showOtherCursors.value}
 					/>
 					Show users cursors
 				</label>
@@ -479,6 +482,8 @@
 		</div>
 
 		<div class="overlay-content">
+			<IdentitySettings ownUserId={serverConnection.ownUserId} />
+
 			<div class="field">
 				<label for="server-url">Server URL</label>
 				<input 
@@ -927,4 +932,8 @@
 			transform: rotate(360deg);
 		}
 	}
+
+
+
+
 </style>

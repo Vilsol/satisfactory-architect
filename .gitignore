@@ -2,3 +2,7 @@
 *.sqlite
 *.sqlite-journal
 .vite
+
+# Agent instructions and personal notes
+CLAUDE.md
+TODO.md

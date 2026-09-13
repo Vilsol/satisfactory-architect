@@ -2,7 +2,7 @@
 	import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
 	import SfIconView from "../SFIconView.svelte";
 	import { assertUnreachable } from "$lib/utilties";
-	import { globals } from "../../datamodel/globals.svelte";
+	import { settings } from "$lib/settings.svelte";
 	import { getNodeRadius, isNodeSelectable } from "../../datamodel/nodeTypeProperties.svelte";
 	import type { GraphNode, GraphNodeSplitterMergerProperties } from "../../datamodel/GraphNode.svelte";
 	import type { IVector2D } from "../../datamodel/GraphView.svelte";
@@ -88,7 +88,18 @@
 		return path;
 	});
 
-	const displayName = node.properties.type === "splitter" ? "Splitter" : "Merger";
+	const isMerger = $derived(node.properties.type === "merger");
+	const displayName = $derived(isMerger ? "Merger" : "Splitter");
+
+	// A splitter stays a circle and a merger becomes a diamond, so the two can be told
+	// apart at a glance without reading the tooltip. Both are the same distance from
+	// the centre in every direction, so belts still meet them cleanly.
+	const diamondPoints = $derived([
+		`0,${-outerRadius}`,
+		`${outerRadius},0`,
+		`0,${outerRadius}`,
+		`${-outerRadius},0`,
+	].join(" "));
 </script>
 
 <g
@@ -99,7 +110,11 @@
 	class:highlight-hovered={highlightHovered}
 	data-tooltip={displayName}
 >
-	<circle r={outerRadius} />
+	{#if isMerger}
+		<polygon class="outline" points={diamondPoints} />
+	{:else}
+		<circle class="outline" r={outerRadius} />
+	{/if}
 	<path
 		class="connections"
 		d={connectionsPath}
@@ -110,7 +125,7 @@
 		y={-innerRadius}
 		size={innerRadius * 2}
 	/>
-	{#if globals.debugShowNodeIds}
+	{#if settings.debugShowNodeIds.value}
 		<text
 			x="0"
 			y="-15"
@@ -126,7 +141,7 @@
 
 <style lang="scss">
 	.splitter-merger { 
-		circle {
+		.outline {
 			fill: var(--node-background-color);
 			stroke: var(--node-border-color);
 			stroke-width: 2px;
@@ -142,19 +157,19 @@
 	}
 
 	.splitter-merger.selectable:hover:not(:where(.selected, .highlight-hovered)) {
-		circle {
+		.outline {
 			stroke: var(--node-border-hover-color);
 		}
 	}
 
 	.splitter-merger:where(.highlight-attachable) {
-		circle, .connections {
+		.outline, .connections {
 			stroke: var(--node-border-highlight-color);
 		}
 	}
 
 	.splitter-merger:where(.selected, .highlight-hovered) {
-		circle, .connections {
+		.outline, .connections {
 			stroke: var(--node-border-selected-color);
 		}
 	}

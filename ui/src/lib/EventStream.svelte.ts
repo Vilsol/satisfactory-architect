@@ -3,7 +3,7 @@ import type { NewNodeDetails } from "./datamodel/GraphNode.svelte";
 import type { GraphPage } from "./datamodel/GraphPage.svelte";
 import type { ChangelogEntry } from "./datamodel/constants";
 
-export type EventType = "" | "showContextMenu" | "showProductionSelector" | "confirmationPrompt" | "showColorPicker" | "showIconPicker" | "showConnectionOverlay" | "showReconnectOverlay" | "showChangelog" | "showCorruptSaveOverlay";
+export type EventType = "" | "showContextMenu" | "showProductionSelector" | "confirmationPrompt" | "showColorPicker" | "showIconPicker" | "showConnectionOverlay" | "showReconnectOverlay" | "showChangelog" | "showCorruptSaveOverlay" | "showSettings";
 
 export interface EventBase {
 	type: EventType;
@@ -99,6 +99,10 @@ export interface ShowConnectionOverlayEvent extends EventBase {
 	type: "showConnectionOverlay";
 }
 
+export interface ShowSettingsEvent extends EventBase {
+	type: "showSettings";
+}
+
 export interface ShowChangelogEvent extends EventBase {
 	type: "showChangelog";
 	changelog: Record<number, ChangelogEntry[]>;
@@ -122,4 +126,4 @@ export interface EmptyEvent extends EventBase {
 	type: "";
 }
 
-export type AllowedEventTypes = EmptyEvent | ShowContextMenuEvent | ShowProductionSelectorEvent | ConfirmationPromptEvent | ShowColorPickerEvent | ShowIconPickerEvent | ShowConnectionOverlayEvent | ShowReconnectOverlayEvent | ShowChangelogEvent | ShowCorruptSaveOverlayEvent;
+export type AllowedEventTypes = EmptyEvent | ShowContextMenuEvent | ShowProductionSelectorEvent | ConfirmationPromptEvent | ShowColorPickerEvent | ShowIconPickerEvent | ShowConnectionOverlayEvent | ShowReconnectOverlayEvent | ShowChangelogEvent | ShowCorruptSaveOverlayEvent | ShowSettingsEvent;

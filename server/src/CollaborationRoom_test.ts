@@ -94,6 +94,8 @@ function createMockClient(
 		currentPageId: null,
 		lastHeartbeat: Date.now(),
 		localIdCounter: "0",
+		identity: { name: "Test", color: "#888888" },
+		selection: { nodeIds: [], edgeIds: [] },
 		updateFromHeartbeat: spy(),
 		sendMessage: spy(),
 		get userId() {
@@ -545,6 +547,8 @@ describe("CollaborationRoom", () => {
 		it("should forward ID counter to room state", async () => {
 			const client = createMockClient("socket-1", {
 				localIdCounter: "500",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			});
 			await room.addClient(client, "upload");
 
@@ -898,6 +902,8 @@ describe("CollaborationRoom", () => {
 		it("should save snapshot before disposing", async () => {
 			const client = createMockClient("socket-1", {
 				localIdCounter: "42",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			});
 
 			await room.setRoomState("socket-setup", createTestState());

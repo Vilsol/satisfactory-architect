@@ -9,10 +9,9 @@
 	import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
 	import SfIconView from "../SFIconView.svelte";
 	import type { EventStream } from "$lib/EventStream.svelte";
-	import { darkTheme, globals } from "$lib/datamodel/globals.svelte";
+	import { settings } from "$lib/settings.svelte";
 	import type { AppState } from "$lib/datamodel/AppState.svelte";
 	import { changelog } from "$lib/datamodel/constants";
-	import { checkDataModelConsistency, repairDataModelConsistency } from "$lib/datamodel/consistencyTools";
 
 	interface Props {
 		page: GraphPage;
@@ -89,7 +88,7 @@
 			v => v.autoMultiplier,
 			(v, value) => {
 				v.autoMultiplier = value;
-				globals.useAutoRateForFactoryInOutput = value;
+				settings.autoRateForFactoryIo.value = value;
 			},
 		);
 	});;
@@ -176,6 +175,16 @@
 			}
 		}
 	}
+	/** Anything that can be turned - unlike the multiplier, auto-rate ones count too. */
+	const hasRotatableNodesSelected = $derived.by(() => {
+		for (const nodeId of page.selectedNodes.values()) {
+			if (page.nodes.get(nodeId)?.properties.type === "production") {
+				return true;
+			}
+		}
+		return false;
+	});
+
 	const hasProductionNodesSelected = $derived.by(() => {
 		for (const nodeId of page.selectedNodes.values()) {
 			const node = page.nodes.get(nodeId);
@@ -289,9 +298,9 @@
 					onClick: () => eventStream.emit({ type: "showConnectionOverlay" }),
 				},
 				{
-					label: darkTheme.value ? "Use Light Theme" : "Use Dark Theme",
-					icon: darkTheme.value ? "light-theme" : "dark-theme",
-					onClick: () => darkTheme.value = !darkTheme.value,
+					label: "Settings",
+					icon: "settings",
+					onClick: () => eventStream.emit({ type: "showSettings" }),
 				},
 				{
 					label: "Show changelog",
@@ -305,37 +314,6 @@
 					label: "View on GitHub",
 					icon: "github",
 					onClick: () => openLinkInNewTab("https://github.com/ArthurHeitmann/satisfactory-architect"),
-				},
-				{
-					label: "Debug",
-					icon: "debug",
-					onClick: () => eventStream.emit({
-						type: "showContextMenu",
-						x: 0,
-						y: 30,
-						items: [
-							{
-								label: globals.debugConsoleLog ? "Disable Debug Log" : "Enable Debug Log",
-								onClick: () => globals.debugConsoleLog = !globals.debugConsoleLog
-							},
-							{
-								label: globals.debugShowNodeIds ? "Hide Node IDs" : "Show Node IDs",
-								onClick: () => globals.debugShowNodeIds = !globals.debugShowNodeIds
-							},
-							{
-								label: globals.debugShowEdgeIds ? "Hide Edge IDs" : "Show Edge IDs",
-								onClick: () => globals.debugShowEdgeIds = !globals.debugShowEdgeIds
-							},
-							{
-								label: "Check Consistency",
-								onClick: () => checkDataModelConsistency(appState)
-							},
-							{
-								label: "Repair Inconsistencies",
-								onClick: () => repairDataModelConsistency(appState)
-							},
-						],
-					}),
 				},
 			]
 		});
@@ -445,6 +423,18 @@
 	{@render optionButtons(aggAutoMultiplier, "", true, [
 		{v: true, display: {text: "Auto Rate"}},
 	])}
+	{#if hasRotatableNodesSelected}
+		<div class="option-group">
+			<button
+				class="click-button"
+				onclick={() => page.rotateSelectedNodes(1)}
+				data-tooltip="Rotate (R, Shift+R the other way)"
+				data-tooltip-position="bottom"
+			>
+				<PresetSvg name={"rotate"} size={18} color="currentColor" />
+			</button>
+		</div>
+	{/if}
 	{#if hasProductionNodesSelected}
 		<div class="option-group">
 			<div class="title">Multiplier</div>
@@ -549,7 +539,8 @@
 
 <style lang="scss">
 	.properties-toolbar {
-		height: 30px;
+		box-sizing: border-box;
+		height: var(--properties-toolbar-height);
 		background-color: var(--properties-toolbar-background-color);
 		border-bottom: 1px solid var(--properties-toolbar-border-color);
 		display: flex;

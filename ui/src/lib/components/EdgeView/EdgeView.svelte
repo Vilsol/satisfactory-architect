@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { getContext, onDestroy } from "svelte";
-	import { blockStateChanges, globals, unblockStateChanges } from "../../datamodel/globals.svelte";
+	import { blockStateChanges, unblockStateChanges } from "../../datamodel/globals.svelte";
+	import { settings } from "$lib/settings.svelte";
 	import type { GraphEdge, GraphEdgeDisplayType } from "../../datamodel/GraphEdge.svelte";
 	import type { ContextMenuItem, ContextMenuItemButtonRow, EventStream } from "$lib/EventStream.svelte";
-	import { assertUnreachable, bezierPoint, floatToString, getThroughputColor, isThroughputBalanced, pluralStr } from "$lib/utilties";
+	import { assertUnreachable, bezierPoint, floatToString, getSlackColor, pluralStr } from "$lib/utilties";
+	import { transportNeededFor } from "../../datamodel/transportTiers";
 	import { updateEdgeOffsets } from "../../datamodel/straightEdgeRouting";
 	import type { IVector2D } from "../../datamodel/GraphView.svelte";
 	import { userCanChangeOrientationVector } from "../../datamodel/nodeTypeProperties.svelte";
@@ -199,8 +201,35 @@
 		}
 		return {canRotateStart, startButtonPosition, canRotateEnd, endButtonPosition};
 	});
-	const isBalanced = $derived(isThroughputBalanced(edge.pushThroughput, edge.pullThroughput));
-	const color = $derived(getThroughputColor(isBalanced, edge.pushThroughput, edge.pullThroughput));
+	const color = $derived(getSlackColor(edge.shortfallAhead, edge.surplusBehind, edge.flow));
+	/**
+	 * Set when somebody else in the room has this belt picked out, or is part-way
+	 * through dragging it out of a building.
+	 */
+	const remoteSelector = $derived.by(() => {
+		const picked = serverConnection.remoteSelection.edges.get(edge.id);
+		if (picked) {
+			return picked;
+		}
+		const draggerId = page.dragHighlightsByUser.edges.get(edge.id);
+		if (draggerId && draggerId !== serverConnection.ownUserId) {
+			return serverConnection.identityOf(draggerId);
+		}
+		return undefined;
+	});
+
+	/** Both ends of a belt carry the same item, so either end can name it. */
+	const itemClass = $derived.by(() => {
+		for (const node of [edge.startNode, edge.endNode]) {
+			const props = node?.properties;
+			if (props && "resourceClassName" in props) {
+				return props.resourceClassName;
+			}
+		}
+		return undefined;
+	});
+	const transport = $derived(itemClass ? transportNeededFor(itemClass, edge.flow) : null);
+	const overCapacity = $derived(transport?.exceedsEverything === true);
 
 	const contextMenuItems = $derived.by(() => {
 		const items: ContextMenuItem[] = [];
@@ -333,8 +362,18 @@
 			class="edge-view-hover-area"
 			d={pathD}
 		/>
+		{#if remoteSelector}
+			<path
+				class="remote-selection-path"
+				d={pathD}
+				style="--remote-select-color: {remoteSelector.color};"
+			>
+				<title>Selected by {remoteSelector.name}</title>
+			</path>
+		{/if}
 		<path
 			class="edge-view-path"
+			class:over-capacity={overCapacity}
 			d={pathD}
 			marker-end={isSelected ? "url(#arrow-wide)" : "url(#arrow)"}
 			stroke-dasharray={edge.properties.isDrainLine ? "1, 5" : "0"}
@@ -392,18 +431,28 @@
 			</UserEvents>
 		{/if}
 	{/each}
-	{#if midPoint && (edge.pushThroughput !== 0 || edge.pullThroughput !== 0)}
+	{#if midPoint && edge.flow !== 0}
 		<EdgeAnnotation
 			x={midPoint.x}
 			y={midPoint.y}
-			text={isBalanced
-				? floatToString(edge.pushThroughput)
-				: `${floatToString(edge.pushThroughput)} / ${floatToString(edge.pullThroughput)}`}
+			text={floatToString(edge.flow)}
 			color={color}
 			align="center"
 		/>
+		{#if transport && settings.showTransportTier.value}
+			<EdgeAnnotation
+				x={midPoint.x}
+				y={midPoint.y + 13}
+				text={overCapacity
+					? `> ${transport.isFluid ? "Pipe" : "Belt"} ${transport.tier.name}`
+					: `${transport.isFluid ? "Pipe" : "Belt"} ${transport.tier.name}`}
+				color={overCapacity ? "var(--over-capacity-color)" : "var(--edge-stroke-color)"}
+				fontSize={7}
+				fontWeight={400}
+			/>
+		{/if}
 	{/if}
-	{#if globals.debugShowEdgeIds && midPoint}
+	{#if settings.debugShowEdgeIds.value && midPoint}
 		<text
 			x={midPoint.x}
 			y={midPoint.y + 13}
@@ -425,10 +474,29 @@
 		stroke-width: 10;
 	}
 	
+	// Somebody else in the room has this picked out, drawn under the belt in their
+	// own colour so both stay readable.
+	.remote-selection-path {
+		fill: none;
+		stroke: var(--remote-select-color);
+		stroke-width: 7;
+		stroke-linecap: round;
+		opacity: 0.45;
+		pointer-events: none;
+	}
+
 	.edge-view-path {
 		transition: stroke 0.1s ease-in-out;
 		stroke: var(--edge-color);
 		stroke-width: 2;
+
+		// More than any single belt or pipe in the game can carry - the line has to be
+		// split before this plan can actually be built.
+		&.over-capacity {
+			stroke: var(--over-capacity-color);
+			stroke-width: 3;
+			filter: drop-shadow(0 0 3px var(--over-capacity-color));
+		}
 	}
 
 	.drag-button {

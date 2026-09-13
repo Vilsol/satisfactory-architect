@@ -1,0 +1,58 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`starter save throughputs > Aluminum Products 1`] = `
+"147    Recipe_PureAluminumIngot_C.output -> Recipe_AluminumCasing_C.input   flow=180
+148    Recipe_PureAluminumIngot_C.output -> Recipe_AluminumSheet_C.input    flow=90
+149    Recipe_AluminumSheet_C.output -> Recipe_HeatSink_C.input             flow=60
+150    Recipe_AluminumCasing_C.output -> Recipe_FusedModularFrame_C.input   flow=75
+151    Recipe_HeatSink_C.output -> Recipe_CoolingSystem_C.input             flow=12
+152    Recipe_AluminumScrap_C.output -> Recipe_PureAluminumIngot_C.input    flow=540
+153    Recipe_Alternate_SloppyAlumina_C.output -> Recipe_AluminumScrap_C.i  flow=360
+154    Desc_Water_C.output -> splitter                                      flow=150
+155    splitter -> splitter                                                 flow=30
+156    splitter -> Recipe_CoolingSystem_C.input                             flow=30
+157    Recipe_IngotCopper_C.output -> Recipe_AluminumSheet_C.input          flow=30
+158    Recipe_IngotCopper_C.output -> Recipe_CopperSheet_C.input            flow=72
+159    Recipe_CopperSheet_C.output -> Recipe_HeatSink_C.input               flow=36
+160    splitter -> merger                                                   flow=120
+161    Recipe_AluminumScrap_C.output -> merger                              flow=180
+162    merger -> Recipe_Alternate_SloppyAlumina_C.input                     flow=300
+163    Desc_OreBauxite_C.output -> Recipe_Alternate_SloppyAlumina_C.input   flow=300
+164    Desc_OreCopper_C.output -> Recipe_IngotCopper_C.input                flow=102
+165    Desc_Coal_C.output -> Recipe_AluminumScrap_C.input                   flow=180
+166    Recipe_AluminumSheet_C.output -> Desc_AluminumPlate_C.input          flow=30
+167    Desc_Rubber_C.output -> Recipe_CoolingSystem_C.input                 flow=12
+168    Recipe_FusedModularFrame_C.output -> Desc_ModularFrameFused_C.input  flow=1.5
+169    Recipe_AluminumCasing_C.output -> Desc_AluminumCasing_C.input        flow=45
+170    Desc_NitrogenGas_C.output -> splitter                                flow=187.5
+171    splitter -> Recipe_FusedModularFrame_C.input                         flow=37.5
+172    splitter -> Recipe_CoolingSystem_C.input                             flow=150
+173    Recipe_CoolingSystem_C.output -> Desc_CoolingSystem_C.input          flow=6
+278    production.output -> Recipe_FusedModularFrame_C.input                flow=1.5
+  spare 1.3125 at production.output"
+`;
+
+exports[`starter save throughputs > Heavy Modular Frames 1`] = `
+"56     Recipe_ModularFrame_C.output -> Recipe_Alternate_ModularFrameHeavy_  flow=7.5
+57     Recipe_Alternate_EncasedIndustrialBeam_C.output -> Recipe_Alternate  flow=9.375
+58     Recipe_SteelPipe_C.output -> Recipe_Alternate_ModularFrameHeavy_C.i  flow=33.75
+59     Recipe_Concrete_C.output -> Recipe_Alternate_ModularFrameHeavy_C.in  flow=20.625
+60     Recipe_SteelPipe_C.output -> Recipe_Alternate_EncasedIndustrialBeam  flow=56.25
+61     Recipe_Alternate_ModularFrameHeavy_C.output -> Desc_ModularFrameHea  flow=2.8125
+62     Recipe_Concrete_C.output -> Recipe_Alternate_EncasedIndustrialBeam_  flow=46.875
+63     Recipe_IronPlateReinforced_C.output -> Recipe_ModularFrame_C.input   flow=24
+64     Recipe_IronRod_C.output -> Recipe_ModularFrame_C.input               flow=96
+65     Recipe_IronPlate_C.output -> Recipe_IronPlateReinforced_C.input      flow=144
+66     Recipe_Alternate_Screw_C.output -> Recipe_IronPlateReinforced_C.inp  flow=288
+67     Recipe_IngotIron_C.output -> Recipe_Alternate_Screw_C.input          flow=72
+68     Recipe_IngotIron_C.output -> Recipe_IronRod_C.input                  flow=96
+69     Recipe_IngotIron_C.output -> Recipe_IronPlate_C.input                flow=216
+70     Recipe_IngotSteel_C.output -> Recipe_SteelPipe_C.input               flow=135
+71     Desc_OreIron_C.output -> Recipe_IngotSteel_C.input                   flow=60
+72     Desc_OreIron_C.output -> Recipe_IngotIron_C.input                    flow=60
+73     Desc_Coal_C.output -> Recipe_IngotSteel_C.input                      flow=135
+74     Desc_Stone_C.output -> Recipe_Concrete_C.input                       flow=202.5
+75     Recipe_ModularFrame_C.output -> Desc_ModularFrame_C.input            flow=8.5
+  short 324 at Recipe_IngotIron_C.input
+  short 75 at Recipe_IngotSteel_C.input"
+`;

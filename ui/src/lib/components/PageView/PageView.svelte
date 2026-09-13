@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { gridSize } from "$lib/datamodel/constants";
 	import { globals } from "$lib/datamodel/globals.svelte";
+	import { settings } from "$lib/settings.svelte";
 	import type { NewNodeDetails } from "$lib/datamodel/GraphNode.svelte";
 	import type { GraphPage } from "$lib/datamodel/GraphPage.svelte";
 	import type { Id } from "$lib/datamodel/IdGen.svelte";
@@ -17,6 +18,8 @@
 	import PropertiesToolbar from "./PropertiesToolbar.svelte";
 	import CursorOverlay from "./CursorOverlay.svelte";
 	import ConnectionStatus from "./ConnectionStatus.svelte";
+	import FactorySummary from "./FactorySummary.svelte";
+	import FindNode from "./FindNode.svelte";
 
 	interface Props {
 		page: GraphPage;
@@ -139,6 +142,54 @@
 		return null;
 	}
 
+	let isFindOpen = $state(false);
+
+	const nudgeKeys: Record<string, {x: number, y: number}> = {
+		ArrowLeft: {x: -1, y: 0},
+		ArrowRight: {x: 1, y: 0},
+		ArrowUp: {x: 0, y: -1},
+		ArrowDown: {x: 0, y: 1},
+	};
+
+	function selectEverything() {
+		page.selectedNodes.clear();
+		page.selectedEdges.clear();
+		for (const node of page.nodes.values()) {
+			if (node.parentNode === null && isNodeSelectable(node)) {
+				page.selectedNodes.add(node.id);
+			}
+		}
+	}
+
+	/** Copy the selection and drop it back on the page, offset a little. */
+	function duplicateSelection() {
+		if (page.selectedNodes.size === 0) {
+			return;
+		}
+		const json = page.selectionAsJson();
+		if (!json) {
+			return;
+		}
+		const offset = page.view.enableGridSnap ? page.view.gridSnap : 25;
+		page.insertJson(json, "local");
+		for (const nodeId of page.selectedNodes) {
+			const node = page.nodes.get(nodeId);
+			if (node && node.parentNode === null) {
+				page.moveNode(node, offset, offset);
+			}
+		}
+	}
+
+	function nudgeSelection(direction: {x: number, y: number}, fine: boolean) {
+		const step = fine ? 1 : (page.view.enableGridSnap ? page.view.gridSnap : 10);
+		for (const nodeId of page.selectedNodes) {
+			const node = page.nodes.get(nodeId);
+			if (node && node.parentNode === null) {
+				page.moveNode(node, direction.x * step, direction.y * step);
+			}
+		}
+	}
+
 	function onKeyDown(key: string, event: KeyboardEvent) {
 		if (event.ctrlKey && key === "z") {
 			page.history.undo();
@@ -152,6 +203,26 @@
 			page.copyOrCutSelection("copy");
 		} else if (event.ctrlKey && key === "x") {
 			page.copyOrCutSelection("cut");
+		} else if (event.ctrlKey && key === "a") {
+			selectEverything();
+			event.preventDefault();
+		} else if (event.ctrlKey && key === "d") {
+			duplicateSelection();
+			event.preventDefault();
+		} else if (event.ctrlKey && key === "f") {
+			isFindOpen = true;
+			event.preventDefault();
+		} else if (!event.ctrlKey && (key === "r" || key === "R")) {
+			// Shift turns it the other way. Ctrl+R is the browser's reload, so it is left
+			// alone.
+			page.rotateSelectedNodes(event.shiftKey ? 3 : 1);
+			event.preventDefault();
+		} else if (key === "Escape") {
+			isFindOpen = false;
+			page.clearAllSelection();
+		} else if (key in nudgeKeys && page.selectedNodes.size > 0) {
+			nudgeSelection(nudgeKeys[key], event.shiftKey);
+			event.preventDefault();
 		}
 	}
 	function onClick(event: CursorEvent) {
@@ -172,6 +243,9 @@
 				{type: "text-note", content: "New Note"},
 				point
 			);
+			// Placing a note is a one-shot action, so hand the pointer back rather than
+			// dropping another note on the next click.
+			page.toolMode = "select-nodes";
 		} else {
 			assertUnreachable(page.toolMode);
 		}
@@ -325,7 +399,7 @@
 	}
 
 	$effect(() => {
-		if (globals.debugConsoleLog) {
+		if (settings.debugConsoleLog.value) {
 			console.log($state.snapshot(page));
 			for (const edge of page.edges.values()) {
 				const startNode = page.nodes.get(edge.startNodeId);
@@ -499,6 +573,10 @@
 	</UserEvents>
 
 	<ConnectionStatus {serverConnection} />
+	{#if settings.showFactorySummary.value}
+		<FactorySummary {page} />
+	{/if}
+	<FindNode {page} open={isFindOpen} onClose={() => isFindOpen = false} />
 
 	<Toolbar bind:activeMode={page.toolMode} x={40} y={10} />
 </div>

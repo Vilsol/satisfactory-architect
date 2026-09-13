@@ -10,11 +10,6 @@ export const globals = $state({
 		x: 0,
 		y: 0,
 	} as { x: number; y: number } | null,
-	useAutoRateForFactoryInOutput: false,
-	showOtherCursors: true,
-	debugShowNodeIds: false,
-	debugShowEdgeIds: false,
-	debugConsoleLog: false,
 });
 
 let stateChangeBlockers = 0;
@@ -28,5 +23,4 @@ export function trackStateChanges(): boolean {
 	return stateChangeBlockers === 0;
 }
 
-export const darkTheme = new LocalStorageState(StorageKeys.darkTheme, true);
 export const appVersion = new LocalStorageState(StorageKeys.appVersion, latestAppVersion);

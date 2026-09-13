@@ -220,29 +220,40 @@ export function isThroughputBalanced(pushed: number, pulled: number): boolean {
 		return true;
 	}
 	const diff = Math.abs(pushed - pulled);
-	if (diff < 5) {
-		if (diff / Math.max(pushed, pulled) < 0.015) {
-			return true;
-		}
-	}
-	return false;
+	return diff <= Math.max(Math.abs(pushed), Math.abs(pulled)) * 1e-9;
 }
 
-export function getThroughputColor(isBalanced: boolean, pushThroughput: number, pullThroughput: number): string {
-	if (isBalanced) {
+/**
+ * Tint for something that is short of material or has some to spare. `reference` is
+ * the rate it is being compared against, so the tint gets stronger the worse the gap
+ * is relative to what is moving. Being short wins over having spare - a starved
+ * factory is the more urgent thing to notice.
+ */
+export function getSlackColor(shortfall: number, surplus: number, reference: number): string {
+	const isShort = shortfall > 0;
+	const amount = isShort ? shortfall : surplus;
+	if (!(amount > 0)) {
 		return "var(--edge-stroke-color)";
-	} else {
-		const mixPercent = (pushThroughput - pullThroughput) / Math.max(pushThroughput, pullThroughput);
-		const minPercent = 0.2;
-		const mixPercentAbs = Math.min(1.0, Math.abs(mixPercent) * 2 + minPercent);
-		if (mixPercent < 0) {
-			return `color-mix(in srgb, var(--underflow-color) ${mixPercentAbs * 100}%, var(--edge-stroke-color))`;
-		} else if (mixPercent > 0) {
-			return `color-mix(in srgb, var(--overflow-color) ${mixPercentAbs * 100}%, var(--edge-stroke-color))`;
-		} else {
-			return "var(--edge-stroke-color)";
-		}
 	}
+	const color = isShort ? "var(--underflow-color)" : "var(--overflow-color)";
+	return `color-mix(in srgb, ${color} ${slackSeverity(amount, reference) * 100}%, var(--edge-stroke-color))`;
+}
+
+/**
+ * How strongly to tint something that is short by `amount` while carrying `reference`.
+ *
+ * The gap is measured against the total that would be moving if it were met, which
+ * keeps the answer between 0 and 1 however big the numbers get. The curve leans on
+ * the low end so a small problem is still visible, and never reaches full strength
+ * early - otherwise everything past a moderate gap looks identically bad.
+ */
+export function slackSeverity(amount: number, reference: number): number {
+	if (!(amount > 0)) {
+		return 0;
+	}
+	const ratio = amount / (Math.max(reference, 0) + amount);
+	const minPercent = 0.25;
+	return Math.min(1, minPercent + (1 - minPercent) * Math.pow(ratio, 0.7));
 }
 
 export function targetsInput(event: Event): boolean {

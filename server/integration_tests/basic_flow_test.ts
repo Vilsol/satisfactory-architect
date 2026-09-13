@@ -95,9 +95,8 @@ Deno.test({
 			const receivedState = joined2.stateData as AppStateJson;
 			
 			assertEquals(receivedState.type, "app-state");
-			// Client 1 sends heartbeat with "0", which overwrites the uploaded "100"
-			// This confirms heartbeat processing works, even if overwriting seems odd (should probably be max)
-			assertEquals(receivedState.idGen, "0");
+			// What client 1 uploaded is what client 2 downloads.
+			assertEquals(receivedState.idGen, "100");
 			
 			client2.startHeartbeat();
 

@@ -1,8 +1,11 @@
+import type { TimerId } from "./utils/Scheduler.ts";
 /**
  * Client connection state and messaging interface
  */
 
 import type {
+	UserIdentity,
+	UserSelection,
 	CursorPosition,
 	HeartbeatMessage,
 	ServerMessage,
@@ -26,6 +29,8 @@ export interface ICollaborationClient {
 	currentPageId: string | null;
 	lastHeartbeat: number;
 	localIdCounter: string;
+	identity: UserIdentity;
+	selection: UserSelection;
 	hasUserId(): boolean;
 	assignUserId(userId: string): void;
 	updateFromHeartbeat(message: HeartbeatMessage): void;
@@ -39,7 +44,7 @@ export interface ICollaborationClient {
  * Represents a connected collaboration client
  */
 export class CollaborationClient implements ICollaborationClient {
-	private heartbeatTimer: number | null = null;
+	private heartbeatTimer: TimerId | null = null;
 	private missedHeartbeats = 0;
 
 	// Client state
@@ -47,6 +52,8 @@ export class CollaborationClient implements ICollaborationClient {
 	public currentPageId: string | null = null;
 	public lastHeartbeat = Date.now();
 	public localIdCounter = "0"; // String to match UI's IdGen format
+	public identity: UserIdentity = { name: "", color: "" };
+	public selection: UserSelection = { nodeIds: [], edgeIds: [] };
 
 	// User ID assigned by room (set when joining a room)
 	private _userId: string | null = null;
@@ -93,6 +100,8 @@ export class CollaborationClient implements ICollaborationClient {
 		this.cursor = message.cursor;
 		this.currentPageId = message.currentPageId;
 		this.localIdCounter = message.localIdCounter;
+		this.identity = message.identity;
+		this.selection = message.selection;
 		this.lastHeartbeat = Date.now();
 		this.missedHeartbeats = 0;
 		this.resetHeartbeatTimeout();

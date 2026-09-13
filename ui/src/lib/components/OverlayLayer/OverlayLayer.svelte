@@ -12,6 +12,7 @@
 	import ReconnectOverlay from "./ReconnectOverlay.svelte";
 	import ChangelogOverlay from "./ChangelogOverlay.svelte";
 	import CorruptSaveOverlay from "./CorruptSaveOverlay.svelte";
+	import SettingsOverlay from "./SettingsOverlay.svelte";
     import type { AppState } from "$lib/datamodel/AppState.svelte";
 
 	interface Props {
@@ -30,7 +31,7 @@
 
 	let activeEvents: EventBase[] = $state([]);
 
-	const uniqueEventTypes: EventType[] = ["showContextMenu", "showProductionSelector", "showColorPicker", "showIconPicker", "showConnectionOverlay", "showReconnectOverlay", "showChangelog", "showCorruptSaveOverlay"];
+	const uniqueEventTypes: EventType[] = ["showContextMenu", "showProductionSelector", "showColorPicker", "showIconPicker", "showConnectionOverlay", "showReconnectOverlay", "showChangelog", "showCorruptSaveOverlay", "showSettings"];
 	function handleEvent(event: EventBase) {
 		const isUniqueEvent = uniqueEventTypes.includes(event.type);
 		if (isUniqueEvent) {
@@ -256,6 +257,11 @@
 			{:else if event.type === "showChangelog"}
 				<ChangelogOverlay
 					event={event as ShowChangelogEvent}
+					{dismissEventStream}
+					onclose={() => closeEvent(event)}
+				/>
+			{:else if event.type === "showSettings"}
+				<SettingsOverlay
 					{dismissEventStream}
 					onclose={() => closeEvent(event)}
 				/>

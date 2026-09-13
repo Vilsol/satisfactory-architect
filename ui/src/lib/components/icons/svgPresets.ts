@@ -50,7 +50,9 @@ export type SvgPresetName =
 	"cursor"|
 	"check"|
 	"drag"|
-	"warning"
+	"warning"|
+	"settings"|
+	"rotate"
 	;
 export const svgPresets: Record<SvgPresetName, SvgPreset> = {
 	"splitter": {
@@ -414,5 +416,43 @@ M 440 -216 L 440 -663 q 0 -17 11.5 -28.5 T 480 -703 q 17 0 28.5 11.5 T 520 -663 
 			d="M109-120q-11 0-20-5.5T75-140q-5-9-5.5-19.5T75-180l370-640q6-10 15.5-15t19.5-5q10 0 19.5 5t15.5 15l370 640q6 10 5.5 20.5T885-140q-5 9-14 14.5t-20 5.5H109Zm69-80h604L480-720 178-200Zm330.5-51.5Q520-263 520-280t-11.5-28.5Q497-320 480-320t-28.5 11.5Q440-297 440-280t11.5 28.5Q463-240 480-240t28.5-11.5Zm0-120Q520-383 520-400v-120q0-17-11.5-28.5T480-560q-17 0-28.5 11.5T440-520v120q0 17 11.5 28.5T480-360q17 0 28.5-11.5ZM480-460Z"
 			fill="currentColor"
 		/>`
+	},
+	"settings": {
+		viewBox: "0 0 100 100",
+		innerHtml: `<circle
+	cx="50"
+	cy="50"
+	r="30"
+	stroke="currentColor"
+	stroke-width="16"
+	fill="none"
+/>
+<path
+	d="M 80.0 50.0 L 94.0 50.0
+M 71.2 71.2 L 81.1 81.1
+M 50.0 80.0 L 50.0 94.0
+M 28.8 71.2 L 18.9 81.1
+M 20.0 50.0 L 6.0 50.0
+M 28.8 28.8 L 18.9 18.9
+M 50.0 20.0 L 50.0 6.0
+M 71.2 28.8 L 81.1 18.9"
+	stroke="currentColor"
+	stroke-width="10"
+	fill="none"
+/>`,
+	},
+	"rotate": {
+		viewBox: "0 0 100 100",
+		innerHtml: `<path
+	d="M 50 20 A 30 30 0 1 1 20 50"
+	stroke="currentColor"
+	stroke-width="9"
+	fill="none"
+	stroke-linecap="round"
+/>
+<path
+	d="M 44 11 L 60 20 L 44 29 Z"
+	fill="currentColor"
+/>`,
 	},
 };

@@ -20,4 +20,17 @@ declare global {
 	}
 }
 
+interface ImportMetaEnv {
+	/**
+	 * The collaboration server this build talks to, e.g. "wss://example.com/ws".
+	 * Unset means "the same host as the page", which is what a deployment that serves
+	 * both from one origin wants.
+	 */
+	readonly VITE_SERVER_URL?: string;
+}
+
+interface ImportMeta {
+	readonly env: ImportMetaEnv;
+}
+
 export {};

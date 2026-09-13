@@ -235,6 +235,48 @@ describe("RoomState", () => {
 
 			assertEquals(result.hasChanged, true);
 		});
+
+		// Every client reports its own counter on every heartbeat. A client that has
+		// created nothing reports a low one, so taking whatever arrived last would hand
+		// the next client to join a counter that has already been used - and it would
+		// then issue ids belonging to existing nodes.
+		it("keeps the highest counter when a client reports a lower one", () => {
+			state.setState(createTestState({ idGen: "50" }));
+
+			state.updateIdCounter("200");
+			state.updateIdCounter("120");
+
+			assertEquals(state.getIdCounter(), "200");
+		});
+
+		it("compares prefixed counters by their number", () => {
+			// In a room each client's ids carry its own prefix.
+			state.setState(createTestState({ idGen: "50" }));
+
+			state.updateIdCounter("b-400");
+			state.updateIdCounter("a-90");
+
+			assertEquals(state.getIdCounter(), "400");
+		});
+
+		it("ignores a counter that is not a number rather than losing the real one", () => {
+			state.setState(createTestState({ idGen: "500" }));
+
+			state.updateIdCounter("nonsense");
+
+			assertEquals(state.getIdCounter(), "500");
+		});
+
+		it("does not mark the room changed when the counter did not move", () => {
+			// Heartbeats arrive constantly; each one counted as a change would have the
+			// room writing snapshots for nothing.
+			state.setState(createTestState({ idGen: "500" }));
+			state.consumeStateChanges();
+
+			state.updateIdCounter("100");
+
+			assertEquals(state.consumeStateChanges().hasChanged, false);
+		});
 	});
 
 	describe("applyCommands", () => {

@@ -4,7 +4,8 @@
 	import OverlayLayer from "$lib/components/OverlayLayer/OverlayLayer.svelte";
 	import { AppState } from "$lib/datamodel/AppState.svelte";
 	import { changelog, latestAppVersion, StorageKeys } from "$lib/datamodel/constants";
-	import { appVersion, darkTheme, globals } from "$lib/datamodel/globals.svelte";
+	import { appVersion, globals } from "$lib/datamodel/globals.svelte";
+	import { settings } from "$lib/settings.svelte";
 	import { starterSaveJson } from "$lib/datamodel/starterSave";
 	import { EventStream } from "$lib/EventStream.svelte";
 	import { loadFormLocalStorage } from "$lib/localStorageState.svelte";
@@ -62,7 +63,7 @@
 	let app: AppState | null = $state(loadResult.app);
 
 	onMount(() => {
-		applyTheme(darkTheme.value);
+		applyTheme(settings.darkTheme.value);
 
 		if (loadResult.failure) {
 			eventStream.emit({
@@ -86,7 +87,7 @@
 	});
 
 	$effect(() => {
-		applyTheme(darkTheme.value);
+		applyTheme(settings.darkTheme.value);
 	});
 
 

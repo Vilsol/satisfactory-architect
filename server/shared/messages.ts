@@ -127,11 +127,32 @@ export interface CommandBatchMessage {
 	commands: Command[];
 }
 
+/** What a person calls themselves and the colour their cursor and selection show in. */
+export interface UserIdentity {
+	name: string;
+	/** A CSS colour, chosen by the user. */
+	color: string;
+}
+
+/**
+ * What someone currently has picked out on their page.
+ *
+ * This travels on the heartbeat rather than as a command on purpose: selecting things
+ * is not an edit. Sending it as a command would put every click of every collaborator
+ * into the document, the undo history and the saved file.
+ */
+export interface UserSelection {
+	nodeIds: string[];
+	edgeIds: string[];
+}
+
 export interface HeartbeatMessage {
 	type: "heartbeat";
 	cursor: CursorPosition;
 	currentPageId: string | null;
 	localIdCounter: string;
+	identity: UserIdentity;
+	selection: UserSelection;
 }
 
 export interface KeepAliveMessage {
@@ -205,6 +226,8 @@ export interface ClientPresence {
 	userId: string;
 	cursor: CursorPosition;
 	currentPageId: string | null;
+	identity: UserIdentity;
+	selection: UserSelection;
 }
 
 export interface RoomListItem {

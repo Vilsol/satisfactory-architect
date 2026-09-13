@@ -1,15 +1,16 @@
 import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
 import type { SFRecipePart } from "$lib/satisfactoryDatabaseTypes";
-import { assertUnreachable, floorToNearest, roundToNearest, ceilToNearest } from "$lib/utilties";
+import { assertUnreachable, roundToNearest } from "$lib/utilties";
 import { SvelteSet } from "svelte/reactivity";
 import type { GraphPage, PageContext } from "./GraphPage.svelte";
 import { Vector2D, type IVector2D } from "./GraphView.svelte";
 import type { Id, IdGen, IdMapper, PasteSource } from "./IdGen.svelte";
 import type { GraphNodeJson } from "../../../../server/shared/types_serialization";
-import { gridSize, NodePriorities, productionNodeIconSize, productionNodeVerticalPadding, productionNodeHorizontalPadding } from "./constants";
+import { NodePriorities } from "./constants";
 import { getNodeRadius } from "./nodeTypeProperties.svelte";
 import { applyJsonToObject, applyJsonToSet, type JsonSerializable } from "./StateHistory.svelte";
-import { globals } from "./globals.svelte";
+import { settings } from "$lib/settings.svelte";
+import { jointSide, jointSlots, normaliseRotation, productionNodeSize, rotateQuarters, type Rotation } from "./productionLayout";
 
 export type GraphNodeType = "production" | "resource-joint" | "splitter" | "merger" | "factory-reference" | "text-note";
 export interface ResourceJointInfo {
@@ -53,6 +54,11 @@ export interface GraphNodeProductionProperties {
 	autoMultiplier: boolean;
 	resourceJoints: ResourceJointInfo[];
 	customColor?: string;
+	/**
+	 * Quarter turns clockwise. Optional, so saves written before buildings could be
+	 * turned load as they always did rather than needing the format version bumped.
+	 */
+	rotation?: Rotation;
 }
 export type LayoutOrientation = "top" | "bottom" | "left" | "right";
 export type JointDragType = "drag-to-connect" | "click-to-connect";
@@ -91,6 +97,15 @@ export class GraphNode<T extends GraphNodeProperties = GraphNodeProperties> impl
 	readonly children: SvelteSet<Id>;
 	readonly properties: T;
 	size: IVector2D;
+	/** For an output joint: made but not shipped. Zero for everything else. */
+	surplus: number;
+	/** For an input joint: wanted but not received. Zero for everything else. */
+	shortfall: number;
+	/**
+	 * The rate this joint would have to be set to so it matched the other side of its
+	 * belts - what upstream could supply it, or what downstream would take from it.
+	 */
+	balanceTarget: number;
 	readonly asJson: any;
 
 	constructor(id: Id, context: PageContext, position: IVector2D, priority: number, edges: Id[], parentNode: Id|null, children: Id[], properties: T, size?: IVector2D) {
@@ -111,6 +126,9 @@ export class GraphNode<T extends GraphNodeProperties = GraphNodeProperties> impl
 			};
 		}
 		this.size = $state(size);
+		this.surplus = $state(0);
+		this.shortfall = $state(0);
+		this.balanceTarget = $state(0);
 		this.asJson = $derived(this.toJSON());
 	}
 
@@ -149,8 +167,8 @@ export class GraphNode<T extends GraphNodeProperties = GraphNodeProperties> impl
 					inputs = [];
 					outputs = [recipePart];
 				}
-				multiplier = 60;
-				if (globals.useAutoRateForFactoryInOutput) {
+				multiplier = settings.factoryIoRate.value;
+				if (settings.autoRateForFactoryIo.value) {
 					useAutoMultiplier = true;
 				}
 				break;
@@ -203,19 +221,19 @@ export class GraphNode<T extends GraphNodeProperties = GraphNodeProperties> impl
 			default:
 				assertUnreachable(details);
 		}
-		const nodeSize = GraphNode.calcSize(Math.max(inputs.length, outputs.length));
+		// A new building comes out upright; turning it is something you do afterwards.
+		const maxJointsPerSide = Math.max(inputs.length, outputs.length);
+		const nodeSize = productionNodeSize(maxJointsPerSide, 0);
+		const inputSlots = jointSlots(inputs.length, maxJointsPerSide, "input", 0);
+		const outputSlots = jointSlots(outputs.length, maxJointsPerSide, "output", 0);
 		const children: GraphNode<GraphNodeResourceJointProperties>[] = [];
 		const resourceJoints: ResourceJointInfo[] = [];
-		const inputsGapSize = floorToNearest(nodeSize.y / inputs.length, gridSize);
-		const outputsGapSize = floorToNearest(nodeSize.y / outputs.length, gridSize);
-		const inputsYStart = -inputsGapSize/2 * (inputs.length - 1);
-		const outputsYStart = -outputsGapSize/2 * (outputs.length - 1);
 		for (let i = 0; i < inputs.length; i++) {
 			const input = inputs[i];
 			const jointNode = new GraphNode(
 				idGen.nextId(),
 				context,
-				{x: -nodeSize.x / 2, y: inputsYStart + inputsGapSize * i},
+				inputSlots[i],
 				NodePriorities.RESOURCE_JOINT,
 				[],
 				null,
@@ -240,7 +258,7 @@ export class GraphNode<T extends GraphNodeProperties = GraphNodeProperties> impl
 			const jointNode = new GraphNode(
 				idGen.nextId(),
 				context,
-				{x: nodeSize.x / 2, y: outputsYStart + outputsGapSize * i},
+				outputSlots[i],
 				NodePriorities.RESOURCE_JOINT,
 				[],
 				null,
@@ -367,15 +385,37 @@ export class GraphNode<T extends GraphNodeProperties = GraphNodeProperties> impl
 		};
 	}
 
-	private static calcSize(maxNodeCount: number): IVector2D {
-		const minHeight1 = (maxNodeCount + 1) * gridSize;
-		const minHeight2 = productionNodeIconSize + productionNodeVerticalPadding * 2;
-		const height = Math.max(minHeight1, minHeight2);
-		const width = productionNodeIconSize + productionNodeHorizontalPadding * 2;
-		return {
-			x: ceilToNearest(width, gridSize),
-			y: ceilToNearest(height, gridSize),
-		};
+	get rotation(): Rotation {
+		return this.properties.type === "production"
+			? normaliseRotation(this.properties.rotation)
+			: 0;
+	}
+
+	/** Turn the building a quarter turn clockwise, or several. */
+	rotateBy(quarters: Rotation): void {
+		this.setRotation(((this.rotation + quarters) % 4) as Rotation);
+	}
+
+	setRotation(rotation: Rotation): void {
+		const properties = this.properties;
+		if (properties.type !== "production") {
+			return;
+		}
+		const previous = normaliseRotation(properties.rotation);
+		if (previous === rotation) {
+			return;
+		}
+		if (rotation === 0) {
+			// Upright is the absence of a rotation, not a rotation of zero. Keeping it
+			// that way means turning a building and turning it back leaves the save
+			// exactly as it was, and gives other people in a room nothing to apply.
+			delete properties.rotation;
+		} else {
+			properties.rotation = rotation;
+		}
+		// The ports are still sitting in the old frame; say so, or the turn would
+		// reshuffle them instead of moving them.
+		this.relayoutJoints(previous);
 	}
 
 	reorderRecipeJoints(page: GraphPage) {
@@ -569,45 +609,50 @@ export class GraphNode<T extends GraphNodeProperties = GraphNodeProperties> impl
 	}
 
 	private onJointCountChanged(): void {
-		if (this.properties.type !== "production") {
+		this.relayoutJoints(this.rotation);
+	}
+
+	/**
+	 * Put every port back on its edge and size the box to fit them.
+	 *
+	 * `currentFrame` is the rotation the ports are sitting in at the moment, which is
+	 * not the building's rotation while a turn is being applied. Undoing it recovers the
+	 * order the ports are in in the building's own frame, so a turn moves the ports
+	 * rather than rearranging them.
+	 */
+	private relayoutJoints(currentFrame: Rotation): void {
+		const properties = this.properties;
+		if (properties.type !== "production") {
 			return;
 		}
-		function nodeCmp(a: GraphNode|undefined, b: GraphNode|undefined): number {
-			if (!a || !b) {
-				return 0;
-			}
-			const aPosSum = a.position.x + a.position.y;
-			const bPosSum = b.position.x + b.position.y;
-			return aPosSum - bPosSum;
-		}
-		const inputs = this.properties.resourceJoints.filter(joint => joint.type === "input")
-			.map(joint => this.context.page.nodes.get(joint.id))
-			.sort(nodeCmp);
-		const outputs = this.properties.resourceJoints.filter(joint => joint.type === "output")
-			.map(joint => this.context.page.nodes.get(joint.id))
-			.sort(nodeCmp);
-		const maxNodeCount = Math.max(inputs.length, outputs.length);
-		this.size = GraphNode.calcSize(maxNodeCount);
+		const page = this.context.page;
+		const rotation = normaliseRotation(properties.rotation);
+		const undo = ((4 - currentFrame) % 4) as Rotation;
+		const rowInOwnOrder = (type: "input" | "output") => properties.resourceJoints
+			.filter(joint => joint.type === type)
+			.map(joint => page.nodes.get(joint.id))
+			.filter(node => node !== undefined)
+			.sort((a, b) => rotateQuarters(a.position, undo).y - rotateQuarters(b.position, undo).y);
 
-		const inputsGapSize = floorToNearest(this.size.y / inputs.length, gridSize);
-		const outputsGapSize = floorToNearest(this.size.y / outputs.length, gridSize);
-		const inputsYStart = -inputsGapSize/2 * (inputs.length - 1);
-		const outputsYStart = -outputsGapSize/2 * (outputs.length - 1);
-		for (let i = 0; i < inputs.length; i++) {
-			const input = inputs[i];
-			if (!input) {
-				continue;
+		const rows = {
+			input: rowInOwnOrder("input"),
+			output: rowInOwnOrder("output"),
+		};
+		const maxJointsPerSide = Math.max(rows.input.length, rows.output.length);
+		this.size = productionNodeSize(maxJointsPerSide, rotation);
+
+		for (const type of ["input", "output"] as const) {
+			const row = rows[type];
+			const slots = jointSlots(row.length, maxJointsPerSide, type, rotation);
+			const side = jointSide(type, rotation);
+			for (let i = 0; i < row.length; i++) {
+				row[i].position.x = slots[i].x;
+				row[i].position.y = slots[i].y;
+				const jointProperties = row[i].properties;
+				if (jointProperties.type === "resource-joint") {
+					jointProperties.layoutOrientation = side;
+				}
 			}
-			input.position.x = -this.size.x / 2;
-			input.position.y = inputsYStart + inputsGapSize * i;
-		}
-		for (let i = 0; i < outputs.length; i++) {
-			const output = outputs[i];
-			if (!output) {
-				continue;
-			}
-			output.position.x = this.size.x / 2;
-			output.position.y = outputsYStart + outputsGapSize * i;
 		}
 	}
 }

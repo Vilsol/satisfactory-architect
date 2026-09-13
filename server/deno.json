@@ -34,6 +34,18 @@
 				"allow": ["./node_modules/.deno/@mongodb-js+zstd@2.0.0/node_modules/@mongodb-js/zstd/build/Release/zstd.node"]
 			}
 		},
+		"docker": {
+			"net": true,
+			"read": {
+				"allow": ["/data", "/app"]
+			},
+			"write": {
+				"allow": ["/data"]
+			},
+			"ffi": {
+				"allow": ["/app/node_modules/.deno/@mongodb-js+zstd@2.0.0/node_modules/@mongodb-js/zstd/build/Release/zstd.node"]
+			}
+		},
 		"tests": {
 			"net": true,
 			"read": true,

@@ -1,5 +1,8 @@
 import { ErrorHandler } from "../errors/ErrorHandler.ts";
 
+/** Whatever the runtime hands back from setTimeout / setInterval. */
+export type TimerId = ReturnType<typeof setTimeout>;
+
 export class Scheduler {
 	/**
 	 * A safe wrapper around setInterval that catches errors and prevents the loop from crashing.
@@ -8,7 +11,7 @@ export class Scheduler {
 		name: string,
 		fn: () => Promise<void> | void,
 		ms: number,
-	): number {
+	): TimerId {
 		return setInterval(async () => {
 			try {
 				await fn();
@@ -28,7 +31,7 @@ export class Scheduler {
 		name: string,
 		fn: () => Promise<void> | void,
 		ms: number,
-	): number {
+	): TimerId {
 		return setTimeout(async () => {
 			try {
 				await fn();

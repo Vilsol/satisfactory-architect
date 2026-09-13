@@ -1,4 +1,4 @@
-import { assertUnreachable, copyText, roundToNearest } from "$lib/utilties";
+import { assertUnreachable, copyText, deepClone, roundToNearest } from "$lib/utilties";
 import { untrack } from "svelte";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { type IdGen, type Id, IdMapper, type PasteSource } from "./IdGen.svelte";
@@ -10,6 +10,8 @@ import { GraphEdge, type GraphEdgeProperties } from "./GraphEdge.svelte";
 import { type LayoutOrientation, GraphNode, type GraphNodeResourceJointProperties, type NewNodeDetails, type ProductionDetails, type JointDragType } from "./GraphNode.svelte";
 import { GraphView, type IVector2D } from "./GraphView.svelte";
 import type { AppState } from "./AppState.svelte";
+import { settings } from "$lib/settings.svelte";
+import type { Rotation } from "./productionLayout";
 
 export type PageContext = {
 	appState: AppState,
@@ -361,7 +363,7 @@ export class GraphPage implements JsonSerializable<PageContext> {
 		);
 		this.addNodes(newNode);
 		const properties: GraphEdgeProperties = {
-			displayType: "curved",
+			displayType: settings.defaultEdgeDisplayType.value,
 			isDrainLine: false,
 			startOrientation: null,
 			endOrientation: null,
@@ -411,6 +413,13 @@ export class GraphPage implements JsonSerializable<PageContext> {
 		}
 	}
 
+	/** Turn every building in the selection, ignoring anything that cannot be turned. */
+	rotateSelectedNodes(quarters: Rotation): void {
+		for (const nodeId of this.selectedNodes) {
+			this.nodes.get(nodeId)?.rotateBy(quarters);
+		}
+	}
+
 	moveNode(node: GraphNode, totalDeltaX: number, totalDeltaY: number) {
 		node.move(totalDeltaX, totalDeltaY, this.view.gridSnap);
 	}
@@ -444,6 +453,16 @@ export class GraphPage implements JsonSerializable<PageContext> {
 	clearAllSelection(): void {
 		this.selectedNodes.clear();
 		this.selectedEdges.clear();
+	}
+
+	/** Pan the view so a node sits in the middle of the screen. */
+	centerOnNode(node: GraphNode): void {
+		const rect = this.svgElement?.getBoundingClientRect();
+		const width = rect?.width ?? 0;
+		const height = rect?.height ?? 0;
+		const position = node.getAbsolutePosition(this);
+		this.view.offset.x = width / 2 - position.x * this.view.scale;
+		this.view.offset.y = height / 2 - position.y * this.view.scale;
 	}
 
 	screenToPageCoords(screen: IVector2D): IVector2D {
@@ -494,9 +513,52 @@ export class GraphPage implements JsonSerializable<PageContext> {
 		}
 	}
 
-	copyOrCutSelection(mode: "copy" | "cut") {
+	/**
+	 * Who is part-way through dragging a new belt out of which node.
+	 *
+	 * A drag in progress is a temporary joint carrying the id of the node it started
+	 * from and whose drag it is. Both are ordinary synced nodes, so everyone already
+	 * has this - it just needs collecting into something a node can ask about itself
+	 * without searching the whole page.
+	 *
+	 * Everything caught up in the drag is listed: the building the belt is being pulled
+	 * out of, the joint on it, the loose end following the cursor, and the belt between
+	 * them - so all of it can be shown in that person's colour.
+	 */
+	get dragHighlightsByUser(): { nodes: Map<Id, string>; edges: Map<Id, string> } {
+		const nodes = new Map<Id, string>();
+		const edges = new Map<Id, string>();
+		for (const node of this.nodes.values()) {
+			if (node.properties.type !== "resource-joint") {
+				continue;
+			}
+			const { jointDragType, dragStartNodeId, dragOwnerUserId } = node.properties;
+			if (!jointDragType || !dragStartNodeId || !dragOwnerUserId) {
+				continue;
+			}
+			// The loose end being dragged around.
+			nodes.set(node.id, dragOwnerUserId);
+			// The joint it was pulled out of, and the building that joint belongs to.
+			nodes.set(dragStartNodeId, dragOwnerUserId);
+			const origin = this.nodes.get(dragStartNodeId);
+			if (origin?.parentNode) {
+				nodes.set(origin.parentNode, dragOwnerUserId);
+			}
+			// And the belt stretched between the two.
+			for (const edgeId of node.edges) {
+				edges.set(edgeId, dragOwnerUserId);
+			}
+		}
+		return { nodes, edges };
+	}
+
+	/** The current selection in the same shape as the clipboard, or null if empty. */
+	selectionAsJson(): any | null {
 		const selectedNodes = Array.from(this.selectedNodes.values()
 			.map((id) => this.nodes.get(id)!));
+		if (selectedNodes.length === 0) {
+			return null;
+		}
 		const selectedJointIds = new Set(selectedNodes
 			.flatMap(n => Array.from(n.children.values())));
 		const selectedJoints = Array.from(selectedJointIds.values()
@@ -506,12 +568,19 @@ export class GraphPage implements JsonSerializable<PageContext> {
 		const allNodeIds = new Set(allNodes.map(n => n.id));
 		const selectedEdges = Array.from(this.edges.values()
 			.filter(e => allNodeIds.has(e.startNodeId) && allNodeIds.has(e.endNodeId)));
-		const json = {
+		return {
 			type: clipboardDataType,
 			version: dataModelVersion,
-			nodes: allNodes.map((n) => n.asJson),
-			edges: selectedEdges.map((e) => e.asJson),
+			nodes: allNodes.map((n) => deepClone(n.asJson)),
+			edges: selectedEdges.map((e) => deepClone(e.asJson)),
 		};
+	}
+
+	copyOrCutSelection(mode: "copy" | "cut") {
+		const json = this.selectionAsJson();
+		if (!json) {
+			return;
+		}
 		copyText(JSON.stringify(json));
 		if (mode === "cut") {
 			this.removeSelectedNodesAndEdges();

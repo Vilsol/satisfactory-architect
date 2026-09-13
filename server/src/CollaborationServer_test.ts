@@ -71,6 +71,8 @@ function createMockClient(
 		currentPageId: null,
 		lastHeartbeat: Date.now(),
 		localIdCounter: "0",
+		identity: { name: "Test", color: "#888888" },
+		selection: { nodeIds: [], edgeIds: [] },
 		updateFromHeartbeat: spy(),
 		sendMessage: spy(),
 		get userId() {
@@ -627,6 +629,8 @@ describe("CollaborationServer", () => {
 				cursor: { x: 100, y: 200 },
 				currentPageId: "page-1",
 				localIdCounter: "500",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			};
 
 			await server.handleMessage(socket, heartbeatMessage);
@@ -645,6 +649,8 @@ describe("CollaborationServer", () => {
 				cursor: { x: 100, y: 200 },
 				currentPageId: "page-1",
 				localIdCounter: "500",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			});
 
 			assertSpyCalls(mockRoom.handleHeartbeat as ReturnType<typeof spy>, 1);
@@ -662,6 +668,8 @@ describe("CollaborationServer", () => {
 				cursor: { x: 0, y: 0 },
 				currentPageId: null,
 				localIdCounter: "0",
+				identity: { name: "Test", color: "#888888" },
+				selection: { nodeIds: [], edgeIds: [] },
 			});
 
 			// Should send error message to socket (welcome + error)

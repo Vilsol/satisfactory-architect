@@ -1,0 +1,63 @@
+name: Server image
+
+# Every push that touches the server. The tag is the run number, which only ever goes
+# up, so a deployment can name an exact build.
+on:
+  push:
+    paths:
+      - "server/**"
+      - ".github/workflows/server-image.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.9.6"
+
+      - name: Test
+        working-directory: server
+        run: deno run test
+
+  image:
+    # Publishing an image that does not pass its own tests helps nobody.
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Sign in to the registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out the tags
+        id: tags
+        run: |
+          # The registry only accepts lowercase, and an owner's name may not be.
+          image="ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr "[:upper:]" "[:lower:]")-server"
+          tags="${image}:${{ github.run_number }},${image}:sha-${GITHUB_SHA::7}"
+          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+            tags="${tags},${image}:latest"
+          fi
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
