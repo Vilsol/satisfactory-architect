@@ -8,6 +8,8 @@
 
 import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
 import type { GraphPage } from "./GraphPage.svelte";
+import { nodePower } from "./nodePower";
+import { buildingOf, clampSloops } from "./overclocking";
 
 export interface SummaryEntry {
 	itemClass: string;
@@ -24,6 +26,8 @@ export interface PageSummary {
 	powerMade: number;
 	/** Total machines, counting a building set to x2.5 as 2.5. */
 	buildingCount: number;
+	/** Somersloops sitting in those machines. */
+	sloopsUsed: number;
 	/** Belts or pipes carrying more than any single line in the game can. */
 	overloadedBelts: number;
 }
@@ -45,26 +49,13 @@ function toEntries(from: Map<string, number>): SummaryEntry[] {
 		.sort((a, b) => b.ratePerMinute - a.ratePerMinute || a.displayName.localeCompare(b.displayName, "en"));
 }
 
-/** Which building a production node is made of, if the data knows. */
-function buildingOf(details: any): string | undefined {
-	switch (details?.type) {
-		case "recipe":
-			return satisfactoryDatabase.recipes[details.recipeClassName]?.producedIn;
-		case "extraction":
-			return details.buildingClassName;
-		case "power-production":
-			return details.powerBuildingClassName;
-		default:
-			return undefined;
-	}
-}
-
 export function summarisePage(page: GraphPage, overloadedBelts = 0): PageSummary {
 	const inputs = new Map<string, number>();
 	const outputs = new Map<string, number>();
 	let powerUsed = 0;
 	let powerMade = 0;
 	let buildingCount = 0;
+	let sloopsUsed = 0;
 
 	for (const node of page.nodes.values()) {
 		if (node.properties.type !== "production") {
@@ -85,14 +76,15 @@ export function summarisePage(page: GraphPage, overloadedBelts = 0): PageSummary
 			continue; // its own page reports these
 		}
 
-		const building = satisfactoryDatabase.buildings[buildingOf(details) ?? ""];
-		if (!building) {
+		if (!satisfactoryDatabase.buildings[buildingOf(details) ?? ""]) {
 			continue;
 		}
 		const machines = Math.max(props.multiplier, 0);
 		buildingCount += machines;
-		powerUsed += building.powerConsumption * machines;
-		powerMade += building.powerProduction * machines;
+		sloopsUsed += clampSloops(props.sloops ?? 0, buildingOf(details)) * machines;
+		const power = nodePower(props);
+		powerUsed += power.consumed;
+		powerMade += power.produced;
 	}
 
 	return {
@@ -101,6 +93,7 @@ export function summarisePage(page: GraphPage, overloadedBelts = 0): PageSummary
 		powerUsed,
 		powerMade,
 		buildingCount,
+		sloopsUsed,
 		overloadedBelts,
 	};
 }

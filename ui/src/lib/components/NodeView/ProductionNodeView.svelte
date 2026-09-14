@@ -16,6 +16,21 @@
 
 	const page = $derived(node.context.page);
 
+	/**
+	 * Only says anything when the building has been changed from how it comes out of
+	 * the box, so an ordinary factory is not covered in labels.
+	 */
+	const overclockLabel = $derived.by(() => {
+		const parts: string[] = [];
+		if (node.clockSpeed !== 1) {
+			parts.push(`${floatToString(node.clockSpeed * 100, 4)}%`);
+		}
+		if (node.sloops > 0) {
+			parts.push(`${node.sloops}\u25c6`);
+		}
+		return parts.join("  ");
+	});
+
 	const isSelected = $derived(page.selectedNodes.has(node.id));
 	const highlightAttachable = $derived(page.highlightedNodes.attachable.has(node.id));
 	const highlightHovered = $derived(page.highlightedNodes.hovered.has(node.id));
@@ -117,6 +132,14 @@
 			textAlign="right"
 		/>
 	{/if}
+	{#if overclockLabel}
+		<text
+			class="overclock-label"
+			x="0"
+			y={-productionNodeIconSize / 2 - 6}
+			text-anchor="middle"
+		>{overclockLabel}</text>
+	{/if}
 	{#if factoryName}
 		<foreignObject
 			x={-node.size.x / 2 + 12}
@@ -164,6 +187,13 @@
 				stroke: var(--node-border-selected-color);
 			}
 		}
+	}
+
+	.overclock-label {
+		pointer-events: none;
+		font-size: 11px;
+		fill: var(--node-main-text-color);
+		opacity: 0.75;
 	}
 
 	.factory-name {

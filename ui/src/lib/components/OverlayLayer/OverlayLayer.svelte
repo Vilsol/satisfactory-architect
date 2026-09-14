@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { EventStream, type ConfirmationPromptEvent, type EventBase, type EventType, type ShowChangelogEvent, type ShowColorPickerEvent, type ShowConnectionOverlayEvent, type ShowContextMenuEvent, type ShowCorruptSaveOverlayEvent, type ShowIconPickerEvent, type ShowProductionSelectorEvent, type ShowReconnectOverlayEvent } from "$lib/EventStream.svelte";
+	import { EventStream, type ConfirmationPromptEvent, type EventBase, type EventType, type ShowChangelogEvent, type ShowColorPickerEvent, type ShowConnectionOverlayEvent, type ShowContextMenuEvent, type ShowCorruptSaveOverlayEvent, type ShowIconPickerEvent, type ShowProductionSelectorEvent, type ShowReconnectOverlayEvent, type ShowRecipeComparisonEvent } from "$lib/EventStream.svelte";
 	import { onDestroy, onMount, setContext, type Snippet } from "svelte";
 	import ContextMenuOverlay from "./ContextMenuOverlay.svelte";
 	import RecipeSelectorOverlay from "./RecipeSelectorOverlay.svelte";
@@ -13,6 +13,7 @@
 	import ChangelogOverlay from "./ChangelogOverlay.svelte";
 	import CorruptSaveOverlay from "./CorruptSaveOverlay.svelte";
 	import SettingsOverlay from "./SettingsOverlay.svelte";
+	import RecipeComparisonOverlay from "./RecipeComparisonOverlay.svelte";
     import type { AppState } from "$lib/datamodel/AppState.svelte";
 
 	interface Props {
@@ -31,7 +32,7 @@
 
 	let activeEvents: EventBase[] = $state([]);
 
-	const uniqueEventTypes: EventType[] = ["showContextMenu", "showProductionSelector", "showColorPicker", "showIconPicker", "showConnectionOverlay", "showReconnectOverlay", "showChangelog", "showCorruptSaveOverlay", "showSettings"];
+	const uniqueEventTypes: EventType[] = ["showContextMenu", "showProductionSelector", "showColorPicker", "showIconPicker", "showConnectionOverlay", "showReconnectOverlay", "showChangelog", "showCorruptSaveOverlay", "showSettings", "showRecipeComparison"];
 	function handleEvent(event: EventBase) {
 		const isUniqueEvent = uniqueEventTypes.includes(event.type);
 		if (isUniqueEvent) {
@@ -257,6 +258,12 @@
 			{:else if event.type === "showChangelog"}
 				<ChangelogOverlay
 					event={event as ShowChangelogEvent}
+					{dismissEventStream}
+					onclose={() => closeEvent(event)}
+				/>
+			{:else if event.type === "showRecipeComparison"}
+				<RecipeComparisonOverlay
+					event={event as ShowRecipeComparisonEvent}
 					{dismissEventStream}
 					onclose={() => closeEvent(event)}
 				/>

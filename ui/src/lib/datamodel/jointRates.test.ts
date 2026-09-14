@@ -147,3 +147,44 @@ describe("sizing a new building to match what it was dragged from", () => {
 		expect(machinesToMatch(page, input, 60)).toBeNull();
 	});
 });
+
+describe("joints on a building that has been tuned", () => {
+	test("running a smelter faster moves more through its joints", () => {
+		const page = newPage();
+		const node = recipe(page, "Recipe_IngotIron_C", 1);
+		const out = joint(page, node, "output", INGOT);
+		const base = jointRate(page, out)!;
+
+		node.setClockSpeed(2.5);
+		expect(jointRate(page, out)).toBeCloseTo(base * 2.5, 6);
+
+		node.setClockSpeed(0.5);
+		expect(jointRate(page, out)).toBeCloseTo(base * 0.5, 6);
+	});
+
+	test("a somersloop doubles what comes out, and what goes in stays put", () => {
+		const page = newPage();
+		const node = recipe(page, "Recipe_IngotIron_C", 1);
+		const out = joint(page, node, "output", INGOT);
+		const inp = joint(page, node, "input", ORE);
+		const baseOut = jointRate(page, out)!;
+		const baseIn = jointRate(page, inp)!;
+
+		node.setSloops(1);
+		expect(jointRate(page, out)).toBeCloseTo(baseOut * 2, 6);
+		// A somersloop makes more out of the same ore, so the input is unchanged.
+		expect(jointRate(page, inp)).toBeCloseTo(baseIn, 6);
+	});
+
+	test("sizing a new building to match an overclocked one accounts for the speed", () => {
+		const page = newPage();
+		const node = recipe(page, "Recipe_IngotIron_C", 1);
+		node.setClockSpeed(2.5);
+		const out = joint(page, node, "output", INGOT);
+
+		const plain = recipe(page, "Recipe_IronPlate_C", 1);
+		const plateIn = joint(page, plain, "input", INGOT);
+		const needed = machinesToMatch(page, plateIn, jointRate(page, out));
+		expect(needed).toBeCloseTo(jointRate(page, out)! / ratePerMachine(page, plateIn)!, 6);
+	});
+});

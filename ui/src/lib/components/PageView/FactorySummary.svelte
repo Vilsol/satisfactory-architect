@@ -91,6 +91,12 @@
 				<span class="name">Machines</span>
 				<span class="value">{floatToString(summary.buildingCount, 4)}</span>
 			</div>
+			{#if summary.sloopsUsed > 0}
+				<div class="row">
+					<span class="name">Somersloops</span>
+					<span class="value">{floatToString(summary.sloopsUsed, 4)}</span>
+				</div>
+			{/if}
 
 			{#if summary.overloadedBelts > 0}
 				<div class="row warning">

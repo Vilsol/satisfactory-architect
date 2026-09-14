@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
+	import { portFactor } from "$lib/datamodel/overclocking";
 	import type { SFPowerFuel, SFRecipe } from "$lib/satisfactoryDatabaseTypes";
 	import SfIconView from "../SFIconView.svelte";
 	import EdgeAnnotation from "../EdgeAnnotation.svelte";
@@ -47,8 +48,9 @@
 				const recipePart = recipeParts?.find(p => p.itemClass === node.properties.resourceClassName);
 				const amountPerMinute = recipePart?.amountPerMinute;
 				if (amountPerMinute !== undefined) {
-					productionRate = amountPerMinute * parentProperties.multiplier;
-					setProductionRate = ((value: number) => parentProperties.multiplier = value / amountPerMinute);
+					const tuning = portFactor(parentProperties, node.properties.jointType);
+					productionRate = amountPerMinute * parentProperties.multiplier * tuning;
+					setProductionRate = ((value: number) => parentProperties.multiplier = value / amountPerMinute / tuning);
 				}
 				break;
 			case "factory-output":
@@ -64,8 +66,9 @@
 				const productionBuilding = satisfactoryDatabase.extractionBuildings[parentDetails.buildingClassName];
 				const purityModifier = parentDetails.purityModifier ?? 1;
 				if (productionBuilding && purityModifier) {
-					productionRate = productionBuilding.baseProductionRate * purityModifier * parentProperties.multiplier;
-					setProductionRate = ((value: number) => parentProperties.multiplier = value / productionBuilding.baseProductionRate / purityModifier);
+					const tuning = portFactor(parentProperties, node.properties.jointType);
+					productionRate = productionBuilding.baseProductionRate * purityModifier * parentProperties.multiplier * tuning;
+					setProductionRate = ((value: number) => parentProperties.multiplier = value / productionBuilding.baseProductionRate / purityModifier / tuning);
 				}
 				break;
 			case "factory-reference":

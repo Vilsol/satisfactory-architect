@@ -9,6 +9,7 @@
 import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
 import type { GraphNode, GraphNodeProductionProperties, GraphNodeResourceJointProperties } from "./GraphNode.svelte";
 import type { GraphPage } from "./GraphPage.svelte";
+import { portFactor } from "./overclocking";
 
 function owningBuilding(page: GraphPage, joint: GraphNode): GraphNode<GraphNodeProductionProperties> | null {
 	if (joint.properties.type !== "resource-joint" || joint.parentNode === null) {
@@ -36,25 +37,29 @@ export function ratePerMachine(page: GraphPage, joint: GraphNode | undefined): n
 	}
 	const jointProps = joint.properties as GraphNodeResourceJointProperties;
 	const details = building.properties.details;
+	// How hard the building is being run, and which end of it this joint is on.
+	const tuning = portFactor(building.properties, jointProps.jointType);
 
 	switch (details.type) {
 		case "recipe": {
 			const recipe = satisfactoryDatabase.recipes[details.recipeClassName];
 			if (!recipe) return null;
 			const parts = jointProps.jointType === "input" ? recipe.inputs : recipe.outputs;
-			return parts.find(p => p.itemClass === jointProps.resourceClassName)?.amountPerMinute ?? null;
+			const perMachine = parts.find(p => p.itemClass === jointProps.resourceClassName)?.amountPerMinute;
+			return perMachine === undefined ? null : perMachine * tuning;
 		}
 		case "power-production": {
 			const fuel = satisfactoryDatabase.powerProducers[details.powerBuildingClassName]
 				?.fuels[details.fuelClassName];
 			if (!fuel) return null;
 			const parts = jointProps.jointType === "input" ? fuel.inputs : fuel.outputs;
-			return parts.find(p => p.itemClass === jointProps.resourceClassName)?.amountPerMinute ?? null;
+			const perMachine = parts.find(p => p.itemClass === jointProps.resourceClassName)?.amountPerMinute;
+			return perMachine === undefined ? null : perMachine * tuning;
 		}
 		case "extraction": {
 			const extractor = satisfactoryDatabase.extractionBuildings[details.buildingClassName];
 			if (!extractor) return null;
-			return extractor.baseProductionRate * (details.purityModifier ?? 1);
+			return extractor.baseProductionRate * (details.purityModifier ?? 1) * tuning;
 		}
 		case "factory-input":
 		case "factory-output":

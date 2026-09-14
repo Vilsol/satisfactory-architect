@@ -143,3 +143,37 @@ describe("the real starter save", () => {
 		}
 	});
 });
+
+describe("buildings that have been tuned", () => {
+	test("an overclocked building draws more than its base", () => {
+		const page = newPage();
+		const node = building(page, "Recipe_IronPlate_C", 1);
+		const before = summarisePage(page).powerUsed;
+		node.setClockSpeed(2.5);
+		expect(summarisePage(page).powerUsed).toBeCloseTo(before * 2.5 ** 1.321929, 3);
+	});
+
+	test("somersloops are counted across every building on the page", () => {
+		const page = newPage();
+		expect(summarisePage(page).sloopsUsed).toBe(0);
+
+		const constructors = building(page, "Recipe_IronPlate_C", 3);
+		constructors.setSloops(1);
+		// Three constructors with one somersloop each is three somersloops.
+		expect(summarisePage(page).sloopsUsed).toBe(3);
+
+		const manufacturers = building(page, "Recipe_Computer_C", 2);
+		manufacturers.setSloops(4);
+		expect(summarisePage(page).sloopsUsed).toBe(11);
+	});
+
+	test("a building that takes no somersloops never counts any", () => {
+		const page = newPage();
+		const miner = page.makeNewNode(
+			{ type: "extraction", partClassName: ORE, buildingClassName: "Build_MinerMk1_C", purityModifier: 1 },
+			{ x: 0, y: 0 },
+		) as GraphNode<GraphNodeProductionProperties>;
+		miner.setSloops(4);
+		expect(summarisePage(page).sloopsUsed).toBe(0);
+	});
+});

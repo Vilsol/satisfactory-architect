@@ -3,11 +3,12 @@
  *
  * Every belt carries exactly one item type and every joint is typed, so the page
  * is not one big tangled problem - it is a handful of small independent ones, one
- * per item type. Buildings link the item types together, but only through their
- * multiplier, which is a fixed number by the time we get here.
+ * per item type. Buildings link the item types together, but only through how big
+ * they are and how hard they are being run, both fixed numbers by the time we get here.
  */
 
 import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
+import { outputFactor, portFactor } from "./overclocking";
 import type { SFPowerFuel, SFRecipe } from "$lib/satisfactoryDatabaseTypes";
 import { solveFlow, type FlowEdgeSpec, type FlowNodeSpec } from "./flowSolver";
 import type { GraphNode, GraphNodeResourceJointProperties } from "./GraphNode.svelte";
@@ -77,7 +78,8 @@ function collectPorts(page: GraphPage): { ports: Port[]; passThrough: Map<Id, st
 				const parts = joint.properties.jointType === "input" ? recipe.inputs : recipe.outputs;
 				const part = parts.find(p => p.itemClass === joint.properties.resourceClassName);
 				if (!part) continue;
-				const rate = part.amountPerMinute * props.multiplier;
+				const rate = part.amountPerMinute * props.multiplier
+					* portFactor(props, joint.properties.jointType);
 				ports.push(makePort(joint, info.type, rate, auto));
 			}
 		} else if (details.type === "extraction") {
@@ -85,7 +87,8 @@ function collectPorts(page: GraphPage): { ports: Port[]; passThrough: Map<Id, st
 			if (!building) continue;
 			const joint = jointOf(props.resourceJoints[0]?.id);
 			if (!joint) continue;
-			const rate = building.baseProductionRate * (details.purityModifier ?? 1) * props.multiplier;
+			const rate = building.baseProductionRate * (details.purityModifier ?? 1) * props.multiplier
+				* outputFactor(props);
 			ports.push(makePort(joint, "output", rate, auto));
 		} else if (details.type === "factory-input" || details.type === "factory-output") {
 			const joint = jointOf(props.resourceJoints[0]?.id);

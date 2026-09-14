@@ -2,6 +2,8 @@
 	import { getContext, onDestroy, onMount } from "svelte";
 	import UserEvents, { type CursorEvent, type DragEvent } from "../UserEvents.svelte";
 	import { jointRate, machinesToMatch } from "../../datamodel/jointRates";
+	import { recipesProducing } from "../../datamodel/recipeComparison";
+	import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
 	import { isNodeSelectable, isNodeDraggable, isNodeDeletable, getNodeRadius, isResourceNodeSplittable } from "../../datamodel/nodeTypeProperties.svelte";
 	import ResourceJointNodeView from "./ResourceJointNodeView.svelte";
 	import type { ContextMenuItem, EventStream } from "$lib/EventStream.svelte";
@@ -155,6 +157,26 @@
 				label: "Add Outgoing Connection",
 				icon: "arrow-right-base-left",
 				onClick: startNewOutgoingConnection,
+			});
+		}
+		// Whatever this node is a way of making, so the alternatives can be looked at.
+		const comparableItem = (() => {
+			if (node.properties.type === "resource-joint") {
+				return node.properties.resourceClassName;
+			}
+			if (node.properties.type === "production" && node.properties.details.type === "recipe") {
+				return satisfactoryDatabase.recipes[node.properties.details.recipeClassName]?.outputs[0]?.itemClass;
+			}
+			return undefined;
+		})();
+		if (comparableItem && recipesProducing(comparableItem).length > 1) {
+			items.push({
+				label: "Compare Recipes",
+				icon: "branch",
+				onClick: () => eventStream.emit({
+					type: "showRecipeComparison",
+					itemClass: comparableItem,
+				}),
 			});
 		}
 		if (node.properties.type === "production" && node.properties.details.type === "factory-reference") {

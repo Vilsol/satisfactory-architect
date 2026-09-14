@@ -52,6 +52,16 @@ npx tsx scripts\GameJsonDumpProcessor.ts --extracted-files="path\to\extracted\fi
 npx tsx scripts\DocsJsonProcessor.ts --json="C:\Program Files (x86)\Steam\steamapps\common\Satisfactory\CommunityResources\Docs\en-US.json" --extracted-files="path\to\extracted\files\FactoryGame\Content\FactoryGame" --img-save="path\where\to\save\raw\images" --ts-save="path\to\this\repo\ui\src\lib\satisfactoryDatabase.ts"
 ```
 
+### Update the power and somersloop table
+
+This one needs nothing but the game's own docs file, so it can be rerun on its own
+without FModel. Running `DocsJsonProcessor` without `--extracted-files` would blank the
+icon table, so the two are kept apart.
+
+```bash
+npx tsx scripts\BuildingPowerProcessor.ts --json="C:\Program Files (x86)\Steam\steamapps\common\Satisfactory\CommunityResources\Docs\en-US.json" --ts-save="path\to\this\repo\ui\src\lib\satisfactoryBuildingPower.ts"
+```
+
 For the following steps I use [XnConvert](https://www.xnview.com/en/xnconvert).
 
 Convert and save extracted images to `static\img\FactoryGame` as `[name]_[height].webp`.

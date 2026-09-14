@@ -1,4 +1,5 @@
 import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
+import { buildingOf, clampClockSpeed, clampSloops, sloopSlotsOf } from "./overclocking";
 import type { SFRecipePart } from "$lib/satisfactoryDatabaseTypes";
 import { assertUnreachable, roundToNearest } from "$lib/utilties";
 import { SvelteSet } from "svelte/reactivity";
@@ -59,6 +60,13 @@ export interface GraphNodeProductionProperties {
 	 * turned load as they always did rather than needing the format version bumped.
 	 */
 	rotation?: Rotation;
+	/**
+	 * How fast the building is run, as a fraction of normal. Absent means normal speed,
+	 * the same way an absent rotation means upright.
+	 */
+	clockSpeed?: number;
+	/** Somersloops in the building. Absent means none. */
+	sloops?: number;
 }
 export type LayoutOrientation = "top" | "bottom" | "left" | "right";
 export type JointDragType = "drag-to-connect" | "click-to-connect";
@@ -416,6 +424,53 @@ export class GraphNode<T extends GraphNodeProperties = GraphNodeProperties> impl
 		// The ports are still sitting in the old frame; say so, or the turn would
 		// reshuffle them instead of moving them.
 		this.relayoutJoints(previous);
+	}
+
+	get clockSpeed(): number {
+		return this.properties.type === "production"
+			? clampClockSpeed(this.properties.clockSpeed ?? 1)
+			: 1;
+	}
+
+	setClockSpeed(clockSpeed: number): void {
+		const properties = this.properties;
+		if (properties.type !== "production") {
+			return;
+		}
+		const wanted = clampClockSpeed(clockSpeed);
+		if (wanted === 1) {
+			// Normal speed is the absence of a clock speed, so a building that was never
+			// touched and one that was set back to 100% save identically.
+			delete properties.clockSpeed;
+		} else {
+			properties.clockSpeed = wanted;
+		}
+	}
+
+	/** How many somersloops this building would take if it were full. */
+	get sloopSlots(): number {
+		return this.properties.type === "production"
+			? sloopSlotsOf(buildingOf(this.properties.details))
+			: 0;
+	}
+
+	get sloops(): number {
+		return this.properties.type === "production"
+			? clampSloops(this.properties.sloops ?? 0, buildingOf(this.properties.details))
+			: 0;
+	}
+
+	setSloops(sloops: number): void {
+		const properties = this.properties;
+		if (properties.type !== "production") {
+			return;
+		}
+		const wanted = clampSloops(sloops, buildingOf(properties.details));
+		if (wanted === 0) {
+			delete properties.sloops;
+		} else {
+			properties.sloops = wanted;
+		}
 	}
 
 	reorderRecipeJoints(page: GraphPage) {

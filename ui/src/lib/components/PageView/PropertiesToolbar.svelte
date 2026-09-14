@@ -7,6 +7,8 @@
 	import PresetSvg from "../icons/PresetSvg.svelte";
 	import type { SvgPresetName } from "../icons/svgPresets";
 	import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
+	import { nodePower } from "$lib/datamodel/nodePower";
+	import { buildingOf, clampClockSpeed } from "$lib/datamodel/overclocking";
 	import SfIconView from "../SFIconView.svelte";
 	import type { EventStream } from "$lib/EventStream.svelte";
 	import { settings } from "$lib/settings.svelte";
@@ -105,6 +107,48 @@
 			(v, value) => v.customColor = value
 		);
 	});
+	const overclockableNodes = $derived(selectedNodes.filter(
+		node => node.properties.type === "production" && buildingOf(node.properties.details) !== undefined
+	));
+	const aggClockSpeed = $derived.by(() => aggregateValues(
+		overclockableNodes,
+		node => node.clockSpeed,
+		(node, value) => node.setClockSpeed(value),
+	));
+	const sloopableNodes = $derived(selectedNodes.filter(node => node.sloopSlots > 0));
+	/**
+	 * The fullest the whole selection can go. A constructor and a manufacturer together
+	 * stop at the one somersloop the constructor has room for.
+	 */
+	const sloopSlotsAvailable = $derived(sloopableNodes.length === 0
+		? 0
+		: Math.min(...sloopableNodes.map(node => node.sloopSlots)));
+	const aggSloops = $derived.by(() => aggregateValues(
+		sloopableNodes,
+		node => node.sloops,
+		(node, value) => node.setSloops(value),
+	));
+
+	function clockSpeedAsText(): string {
+		return aggClockSpeed.value === undefined ? "" : floatToString(aggClockSpeed.value * 100, 4);
+	}
+	// The box is typed into, so it cannot read straight off the nodes - it would fight
+	// every keystroke. It follows them, and hands what was typed back when editing ends.
+	let clockSpeedText = $state("");
+	$effect(() => {
+		clockSpeedText = clockSpeedAsText();
+	});
+	function commitClockSpeed() {
+		const parsed = parseFloatExpr(clockSpeedText, false);
+		if (isNaN(parsed)) {
+			clockSpeedText = clockSpeedAsText();
+			return;
+		}
+		const clamped = clampClockSpeed(parsed / 100);
+		aggClockSpeed.setValues(clamped);
+		clockSpeedText = floatToString(clamped * 100, 4);
+	}
+
 	const aggDisplayType = $derived.by(() => {
 		return aggregateValues(
 			selectedEdges,
@@ -200,68 +244,36 @@
 		displayName: string;
 		icon: string;
 		count: number;
-		variablePowerRecipes: number[];
 	}
 	const usedBuildings: UsedBuilding[] = $derived.by(() => {
 		const used: Record<string, UsedBuilding> = {};
 		for (const node of selectedNodes) {
 			if (node.properties.type !== "production") continue;
-			const details = node.properties.details;
-			let buildingClassName: string | undefined;
-			let variablePower: number | undefined;
-			switch (details.type) {
-				case "recipe":
-					const recipe = satisfactoryDatabase.recipes[details.recipeClassName];
-					buildingClassName = recipe?.producedIn;
-					variablePower = recipe?.customPowerConsumption?.max;
-					if (variablePower) {
-						variablePower *= node.properties.multiplier;
-					}
-					break;
-				case "extraction":
-					buildingClassName = details.buildingClassName;
-					break;
-				case "power-production":
-					buildingClassName = details.powerBuildingClassName;
-					break;
+			const buildingClassName = buildingOf(node.properties.details);
+			if (!buildingClassName) continue;
+			if (!used[buildingClassName]) {
+				const building = satisfactoryDatabase.buildings[buildingClassName];
+				if (!building)
+					continue;
+				used[buildingClassName] = {
+					buildingClassName: buildingClassName,
+					displayName: building.displayName,
+					icon: building.icon,
+					count: 0,
+				};
 			}
-			if (buildingClassName) {
-				const count = node.properties.multiplier;
-				if (!used[buildingClassName]) {
-					const building = satisfactoryDatabase.buildings[buildingClassName];
-					if (!building)
-						continue;
-					used[buildingClassName] = {
-						buildingClassName: buildingClassName,
-						displayName: building.displayName,
-						icon: building.icon,
-						count: 0,
-						variablePowerRecipes: [],
-					};
-				}
-				if (variablePower) {
-					used[buildingClassName].variablePowerRecipes.push(variablePower);
-				}
-				used[buildingClassName].count += count;
-			}
+			used[buildingClassName].count += node.properties.multiplier;
 		}
 		return Object.values(used).toReversed();
 	});
 	const { powerConsumed, powerProduced } = $derived.by(() => {
 		let powerConsumed = 0;
 		let powerProduced = 0;
-		for (const usedBuilding of usedBuildings) {
-			if (usedBuilding.variablePowerRecipes.length === 0) {
-				const building = satisfactoryDatabase.buildings[usedBuilding.buildingClassName];
-				if (building) {
-					powerConsumed += building.powerConsumption * usedBuilding.count;
-					powerProduced += building.powerProduction * usedBuilding.count;
-				}
-			} else {
-				for (const recipeVariablePower of usedBuilding.variablePowerRecipes) {
-					powerConsumed += recipeVariablePower;
-				}
-			}
+		for (const node of selectedNodes) {
+			if (node.properties.type !== "production") continue;
+			const power = nodePower(node.properties);
+			powerConsumed += power.consumed;
+			powerProduced += power.produced;
 		}
 		return { powerConsumed, powerProduced };
 	});
@@ -457,6 +469,27 @@
 			/>
 		</div>
 	{/if}
+	{#if aggClockSpeed.hasValues}
+		<div class="option-group">
+			<div class="title">Clock</div>
+			<input
+				class="multiplier-input"
+				placeholder="--"
+				bind:value={clockSpeedText}
+				onkeydown={e => {
+					if (e.key === "Enter") {
+						(e.target as HTMLInputElement).blur();
+					}
+				}}
+				onblur={commitClockSpeed}
+			/>
+			<span class="input-unit">%</span>
+		</div>
+	{/if}
+	{#if sloopSlotsAvailable > 0}
+		{@render optionButtons(aggSloops, "Sloops", false,
+			Array.from({length: sloopSlotsAvailable + 1}, (_, count) => ({v: count, display: {text: String(count)}})))}
+	{/if}
 	{#if aggCustomColor.hasValues}
 		<div class="option-group">
 			<div class="title">Color</div>
@@ -560,6 +593,11 @@
 
 		.title {
 			margin-right: 4px;
+		}
+
+		.input-unit {
+			margin-left: -2px;
+			opacity: 0.6;
 		}
 
 		input {

@@ -1,4 +1,4 @@
-export const latestAppVersion = 4;
+export const latestAppVersion = 5;
 export const dataModelVersion = 1;
 
 export const gridSize = 50;
@@ -35,6 +35,32 @@ export type ChangelogEntry = string | {
 };
 
 export const changelog: Record<number, ChangelogEntry[]> = {
+	5: [
+		{
+			text: "Buildings can be run faster or slower",
+			items: [
+				"Set a clock speed on anything you have selected, from 1% to 250%",
+				"Power follows the game's own curve, so an overclocked building costs what it really costs",
+				"Underclocking works the same way, and is still the cheapest way to buy throughput",
+			],
+		},
+		{
+			text: "Somersloops",
+			items: [
+				"Put somersloops in a building to double what comes out of it without using more ore",
+				"Each building takes as many as it does in the game, and the power cost rises to match",
+				"The page summary counts how many you have spent",
+			],
+		},
+		{
+			text: "Comparing recipes",
+			items: [
+				"Right-click a building or a joint and pick Compare Recipes to see every way of making that item",
+				"Everything is quoted per item a minute, so recipes of different sizes can be read against each other",
+				"Alternates are marked, and the one that costs the least power is pointed out",
+			],
+		},
+	],
 	4: [
 		{
 			text: "Splitters and mergers on a belt that is already there",
