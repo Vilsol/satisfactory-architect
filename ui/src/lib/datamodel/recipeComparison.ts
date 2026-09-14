@@ -7,6 +7,7 @@
  */
 
 import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
+import type { GraphNodeProperties } from "./GraphNode.svelte";
 import { nodePower } from "./nodePower";
 
 export interface RecipePart {
@@ -91,4 +92,26 @@ export function recipesProducing(itemClass: string): RecipeOption[] {
 	return options.sort((a, b) =>
 		Number(a.isAlternate) - Number(b.isAlternate) ||
 		a.displayName.localeCompare(b.displayName, "en"));
+}
+
+/**
+ * The item a node is a way of getting, if it is one - what its recipe makes, what a
+ * joint carries, or what a factory output declares the page produces.
+ */
+export function comparableItemOf(properties: GraphNodeProperties): string | undefined {
+	if (properties.type === "resource-joint") {
+		return properties.resourceClassName;
+	}
+	if (properties.type !== "production") {
+		return undefined;
+	}
+	const details = properties.details;
+	switch (details.type) {
+		case "recipe":
+			return satisfactoryDatabase.recipes[details.recipeClassName]?.outputs[0]?.itemClass;
+		case "factory-output":
+			return details.partClassName;
+		default:
+			return undefined;
+	}
 }

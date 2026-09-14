@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { isAlternateRecipe, recipesProducing } from "./recipeComparison";
+import { comparableItemOf, isAlternateRecipe, recipesProducing } from "./recipeComparison";
 
 const INGOT = "Desc_IronIngot_C";
 const ORE = "Desc_OreIron_C";
@@ -73,5 +73,41 @@ describe("what each way costs", () => {
 		const withByproduct = recipesProducing("Desc_Plastic_C")
 			.find(o => o.byproducts.length > 0);
 		expect(withByproduct).toBeDefined();
+	});
+});
+
+describe("which item a node is about", () => {
+	test("a building is about what its recipe makes", () => {
+		expect(comparableItemOf({
+			type: "production",
+			details: { type: "recipe", recipeClassName: "Recipe_IngotIron_C" },
+			multiplier: 1,
+			autoMultiplier: false,
+			resourceJoints: [],
+		})).toBe(INGOT);
+	});
+
+	test("a joint is about what it carries", () => {
+		expect(comparableItemOf({
+			type: "resource-joint",
+			resourceClassName: ORE,
+			jointType: "output",
+			layoutOrientation: undefined,
+			locked: false,
+		})).toBe(ORE);
+	});
+
+	test("a factory output is about what the page makes", () => {
+		expect(comparableItemOf({
+			type: "production",
+			details: { type: "factory-output", partClassName: INGOT },
+			multiplier: 1,
+			autoMultiplier: false,
+			resourceJoints: [],
+		})).toBe(INGOT);
+	});
+
+	test("a note is about nothing", () => {
+		expect(comparableItemOf({ type: "text-note", content: "" } as never)).toBeUndefined();
 	});
 });
