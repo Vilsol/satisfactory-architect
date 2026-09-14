@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths'
-	import { iconPreviews } from '$lib/iconPreviews';
+	import { iconPreview } from '$lib/iconPreviewsLoader.svelte';
 	import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
 	import { onMount } from 'svelte';
 
@@ -33,11 +33,7 @@
 		if (!iconData) {
 			return "";
 		}
-		const preview = iconPreviews[icon];
-		if (preview) {
-			return preview;
-		}
-		return "";
+		return iconPreview(icon);
 	});
 	const showOriginal = $derived.by(() => {
 		return quality === "max" || !imagePreviewSrc;
