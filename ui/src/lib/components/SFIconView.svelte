@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { base } from '$app/paths'
 	import { iconPreview } from '$lib/iconPreviewsLoader.svelte';
+	import { iconLayers } from './iconLayers';
 	import { satisfactoryDatabase } from "$lib/satisfactoryDatabase";
-	import { onMount } from 'svelte';
 
 	interface Props {
 		icon: string;
@@ -19,7 +19,8 @@
 		y = undefined,
 	}: Props = $props();
 
-	let showPreview = $state(false);
+	/** Set once the real image is actually up, so the stand-in can step aside. */
+	let realHasLoaded = $state(false);
 	const iconData = $derived(satisfactoryDatabase.icons[icon]);
 	const resolution = $derived(quality === "max" ? iconData?.resolutions.at(0) : iconData?.resolutions.at(-1));
 	const isInSvg = $derived(x !== undefined && y !== undefined);
@@ -35,20 +36,16 @@
 		}
 		return iconPreview(icon);
 	});
-	const showOriginal = $derived.by(() => {
-		return quality === "max" || !imagePreviewSrc;
-	});
-
-	onMount(() => {
-		if (imagePreviewSrc) {
-			showPreview = true;
-		}
-	});
+	const layers = $derived(iconLayers({
+		quality,
+		hasStandIn: imagePreviewSrc !== "",
+		realHasLoaded,
+	}));
+	const showPreview = $derived(layers.showStandIn);
+	const showOriginal = $derived(layers.showReal);
 
 	function onImageLoad() {
-		if (imagePreviewSrc) {
-			showPreview = false;
-		}
+		realHasLoaded = true;
 	}
 </script>
 
