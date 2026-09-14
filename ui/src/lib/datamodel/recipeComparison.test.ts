@@ -107,6 +107,16 @@ describe("which item a node is about", () => {
 		})).toBe(INGOT);
 	});
 
+	test("a factory input is about what the page needs", () => {
+		expect(comparableItemOf({
+			type: "production",
+			details: { type: "factory-input", partClassName: ORE },
+			multiplier: 1,
+			autoMultiplier: false,
+			resourceJoints: [],
+		})).toBe(ORE);
+	});
+
 	test("a note is about nothing", () => {
 		expect(comparableItemOf({ type: "text-note", content: "" } as never)).toBeUndefined();
 	});

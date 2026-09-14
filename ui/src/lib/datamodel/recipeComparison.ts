@@ -95,8 +95,8 @@ export function recipesProducing(itemClass: string): RecipeOption[] {
 }
 
 /**
- * The item a node is a way of getting, if it is one - what its recipe makes, what a
- * joint carries, or what a factory output declares the page produces.
+ * The item a node is about, if it is about one - what its recipe makes, what a joint
+ * carries, or what a factory input or output declares the page needs or produces.
  */
 export function comparableItemOf(properties: GraphNodeProperties): string | undefined {
 	if (properties.type === "resource-joint") {
@@ -110,6 +110,7 @@ export function comparableItemOf(properties: GraphNodeProperties): string | unde
 		case "recipe":
 			return satisfactoryDatabase.recipes[details.recipeClassName]?.outputs[0]?.itemClass;
 		case "factory-output":
+		case "factory-input":
 			return details.partClassName;
 		default:
 			return undefined;
