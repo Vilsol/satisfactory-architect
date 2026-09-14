@@ -11,6 +11,7 @@ import { type LayoutOrientation, GraphNode, type GraphNodeResourceJointPropertie
 import { GraphView, type IVector2D } from "./GraphView.svelte";
 import type { AppState } from "./AppState.svelte";
 import { settings } from "$lib/settings.svelte";
+import { blockStateChanges, unblockStateChanges } from "./globals.svelte";
 import type { Rotation } from "./productionLayout";
 
 export type PageContext = {
@@ -420,6 +421,66 @@ export class GraphPage implements JsonSerializable<PageContext> {
 		}
 	}
 
+	/**
+	 * Put a splitter or merger into the middle of a belt that already exists.
+	 *
+	 * The one belt becomes two with the new node between them. Returns null, leaving
+	 * everything as it was, if the belt is gone or its ends do not agree on an item -
+	 * there would be nothing to give the new node to carry.
+	 */
+	splitEdge(edge: GraphEdge, nodeType: "splitter" | "merger", position: IVector2D): GraphNode | null {
+		if (!this.edges.has(edge.id)) {
+			return null;
+		}
+		const startNode = this.nodes.get(edge.startNodeId);
+		const endNode = this.nodes.get(edge.endNodeId);
+		if (!startNode || !endNode) {
+			return null;
+		}
+		const resourceClassName = resourceCarriedBy(startNode) ?? resourceCarriedBy(endNode);
+		if (!resourceClassName) {
+			return null;
+		}
+
+		const { displayType, isDrainLine, startOrientation, endOrientation } = edge.properties;
+
+		// One change as far as undo and the other people in the room are concerned, not a
+		// belt vanishing followed by three things appearing.
+		blockStateChanges();
+		try {
+			const middle = this.makeNewNode({ type: nodeType, resourceClassName }, position);
+			this.removeEdge(edge.id);
+
+			// The outer ends keep the direction they were leaving their port in. The two
+			// new inner ends are left on auto, and the bends of the old belt are dropped:
+			// they describe a shape between two points that are no longer joined.
+			this.addEdgeBetweenNodes(
+				new GraphEdge(this.context, this.idGen.nextId(), edge.type, "", "", {
+					displayType,
+					isDrainLine,
+					startOrientation,
+					endOrientation: null,
+				}),
+				startNode,
+				middle,
+			);
+			this.addEdgeBetweenNodes(
+				new GraphEdge(this.context, this.idGen.nextId(), edge.type, "", "", {
+					displayType,
+					isDrainLine,
+					startOrientation: null,
+					endOrientation,
+				}),
+				middle,
+				endNode,
+			);
+			return middle;
+		} finally {
+			unblockStateChanges();
+			this.history.onDataChange();
+		}
+	}
+
 	moveNode(node: GraphNode, totalDeltaX: number, totalDeltaY: number) {
 		node.move(totalDeltaX, totalDeltaY, this.view.gridSnap);
 	}
@@ -525,7 +586,7 @@ export class GraphPage implements JsonSerializable<PageContext> {
 	 * out of, the joint on it, the loose end following the cursor, and the belt between
 	 * them - so all of it can be shown in that person's colour.
 	 */
-	get dragHighlightsByUser(): { nodes: Map<Id, string>; edges: Map<Id, string> } {
+	private readonly _dragHighlightsByUser: { nodes: Map<Id, string>; edges: Map<Id, string> } = $derived.by(() => {
 		const nodes = new Map<Id, string>();
 		const edges = new Map<Id, string>();
 		for (const node of this.nodes.values()) {
@@ -550,6 +611,17 @@ export class GraphPage implements JsonSerializable<PageContext> {
 			}
 		}
 		return { nodes, edges };
+	});
+
+	/**
+	 * Worked out once for the whole page rather than per node.
+	 *
+	 * Every node and every belt asks this about itself while the page is being drawn.
+	 * As a plain getter that meant walking the whole page once per node - fine for a
+	 * few, and a large part of the time to open a page with a few hundred.
+	 */
+	get dragHighlightsByUser(): { nodes: Map<Id, string>; edges: Map<Id, string> } {
+		return this._dragHighlightsByUser;
 	}
 
 	/** The current selection in the same shape as the clipboard, or null if empty. */
@@ -639,4 +711,10 @@ export class GraphPage implements JsonSerializable<PageContext> {
 			}
 		}
 	}
+}
+
+/** The item a joint, splitter or merger deals in. Nothing else carries one. */
+function resourceCarriedBy(node: GraphNode): string | undefined {
+	const properties = node.properties;
+	return "resourceClassName" in properties ? properties.resourceClassName : undefined;
 }

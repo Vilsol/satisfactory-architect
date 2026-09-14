@@ -1,8 +1,23 @@
+<script module lang="ts">
+	/**
+	 * The last size the canvas was measured at, remembered across pages.
+	 *
+	 * Changing page rebuilds the whole canvas, so a freshly bound size starts at zero -
+	 * and with no size there is no viewport, so nothing can be left out of exactly the
+	 * render that most needs it. The window rarely changes size between one page and the
+	 * next, so last time's measurement is a good enough starting point, and the real one
+	 * arrives a moment later either way.
+	 */
+	let lastCanvasWidth = 0;
+	let lastCanvasHeight = 0;
+</script>
+
 <script lang="ts">
 	import { gridSize } from "$lib/datamodel/constants";
 	import { globals } from "$lib/datamodel/globals.svelte";
 	import { settings } from "$lib/settings.svelte";
-	import type { NewNodeDetails } from "$lib/datamodel/GraphNode.svelte";
+	import type { GraphNode, NewNodeDetails } from "$lib/datamodel/GraphNode.svelte";
+	import { edgeRect, nodeRect, overlaps, snapOutwards, visibleRect, warmupMargin, WARMUP_FRACTIONS } from "$lib/datamodel/viewportCulling";
 	import type { GraphPage } from "$lib/datamodel/GraphPage.svelte";
 	import type { Id } from "$lib/datamodel/IdGen.svelte";
 	import { isNodeSelectable } from "$lib/datamodel/nodeTypeProperties.svelte";
@@ -37,6 +52,152 @@
 			const aNode = a[1];
 			const bNode = b[1];
 			return aNode.priority - bNode.priority;
+		});
+	});
+
+	/**
+	 * Only what is on screen is built.
+	 *
+	 * Everything on the page exists in the model either way; this decides what exists as
+	 * components in the document. Each one costs about a quarter of a millisecond to
+	 * build and a belt about twice that, so on a page with a few hundred of them the ones
+	 * nobody can see are most of the time it takes to open the page.
+	 *
+	 * The margin is roughly a screen in every direction, so things are already there
+	 * before they are scrolled to rather than appearing as you arrive.
+	 */
+	let canvasArea: HTMLDivElement | null = $state(null);
+	let canvasWidth = $state(lastCanvasWidth);
+	let canvasHeight = $state(lastCanvasHeight);
+
+	/**
+	 * Watched rather than measured.
+	 *
+	 * Asking an element how big it is makes the browser lay the page out then and there,
+	 * and doing that while the page is still being built holds up everything behind it.
+	 * A resize observer reports the same number afterwards, for free, and the size from
+	 * last time is a good enough starting point until it does.
+	 */
+	$effect(() => {
+		const element = canvasArea;
+		if (!element) {
+			return;
+		}
+		const observer = new ResizeObserver((entries) => {
+			const box = entries[0]?.contentRect;
+			if (!box) {
+				return;
+			}
+			canvasWidth = box.width;
+			canvasHeight = box.height;
+			lastCanvasWidth = box.width;
+			lastCanvasHeight = box.height;
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
+	});
+	/**
+	 * How far past the edge of the screen to keep things.
+	 *
+	 * Nothing pops in without it: what is on screen is worked out in the same update as
+	 * the pan, so it would be correct at zero. It is here so that panning about does not
+	 * build and throw away the same buildings over and over at the boundary.
+	 */
+	const fullViewportMargin = $derived(
+		Math.max(canvasWidth, canvasHeight) / Math.max(page.view.scale, 0.01) / 2,
+	);
+
+	/**
+	 * Which pass of filling in the margin this page is on.
+	 *
+	 * The first frame of a page carries only what is on screen; the margin around it
+	 * follows over the next few passes. It is off screen either way, so nothing is seen
+	 * arriving late - the page simply appears about twice as soon.
+	 */
+	let warmupStep = $state(0);
+	const viewportMargin = $derived(warmupMargin(fullViewportMargin, warmupStep));
+
+	$effect(() => {
+		// Nothing reactive is read here, so this runs once, when the page is opened.
+		let step = 0;
+		let cancel: (() => void) | undefined;
+		const soon = (run: () => void) => {
+			// Filling the margin is work nobody is waiting on, so it goes after anything
+			// the browser would rather be doing. Not every browser offers that yet.
+			if (typeof requestIdleCallback === "function") {
+				const id = requestIdleCallback(run, { timeout: 200 });
+				return () => cancelIdleCallback(id);
+			}
+			const id = requestAnimationFrame(() => run());
+			return () => cancelAnimationFrame(id);
+		};
+		const advance = () => {
+			step += 1;
+			warmupStep = step;
+			cancel = step < WARMUP_FRACTIONS.length - 1 ? soon(advance) : undefined;
+		};
+		cancel = soon(advance);
+		return () => cancel?.();
+	});
+	const viewport = $derived(snapOutwards(
+		visibleRect(
+			page.view.offset,
+			page.view.scale,
+			canvasWidth,
+			canvasHeight,
+			viewportMargin,
+		),
+		// Rounded to a step so the set only changes once the view has really moved.
+		// The step is a fixed distance on the page rather than a share of the screen:
+		// tying it to the zoom means the grid itself moves as you zoom, and the set is
+		// then redone in large uneven lumps instead of a thin ring at a time.
+		gridSize * 8,
+	));
+
+	/**
+	 * Things that stay regardless of where they are.
+	 *
+	 * Something picked out, hovered, or half way through being dragged has to keep
+	 * existing even once it has been dragged off the edge, or it would vanish from under
+	 * the pointer mid-gesture.
+	 */
+	function isPinned(node: GraphNode): boolean {
+		if (page.selectedNodes.has(node.id) || page.highlightedNodes.hovered.has(node.id)) {
+			return true;
+		}
+		if (page.highlightedNodes.attachable.has(node.id)) {
+			return true;
+		}
+		if (node.properties.type === "resource-joint" && node.properties.jointDragType !== undefined) {
+			return true;
+		}
+		return node.id === page.userEventsPriorityNodeId;
+	}
+
+	const visibleNodes = $derived.by(() => {
+		if (canvasWidth === 0 || canvasHeight === 0) {
+			return sortedNodes;
+		}
+		return sortedNodes.filter(([, node]) =>
+			isPinned(node) || overlaps(viewport, nodeRect(node.getAbsolutePosition(page), node.size)),
+		);
+	});
+
+	const visibleEdges = $derived.by(() => {
+		if (canvasWidth === 0 || canvasHeight === 0) {
+			return Array.from(page.edges.entries());
+		}
+		return Array.from(page.edges.entries()).filter(([, edge]) => {
+			if (page.selectedEdges.has(edge.id)) {
+				return true;
+			}
+			const start = edge.startNodePosition;
+			const end = edge.endNodePosition;
+			// A belt whose ends are not both known yet is left in; it is being drawn.
+			if (!start || !end) {
+				return true;
+			}
+			return overlaps(viewport, edgeRect(start, end));
 		});
 	});
 	const enableUserEvents = $derived(!page.userEventsPriorityNodeId);
@@ -497,78 +658,91 @@
 		allowMultiTouchDrag={true}
 	>
 		{#snippet children({ listeners })}
-			<svg
-				class="graph-page-view"
-				width="100%"
-				height="100%"
-				style={
-					`--offset-x: ${page.view.offset.x - gridSize/2 * page.view.scale}px;\n` +
-					`--offset-y: ${page.view.offset.y - gridSize/2 * page.view.scale}px;\n` + 
-					`--square-size: ${page.view.scale * gridSize}px;`
-				}
-				bind:this={svg}
-				{...listeners}
-			>
-				<defs>
-					<marker
-						id="arrow"
-						viewBox="0 0 11 10"
-						refX="0"
-						refY="5"
-						markerWidth="10.5"
-						markerHeight="10"
-						orient="auto-start-reverse"
-						markerUnits="userSpaceOnUse"
-					>
-						<path
-							d="M 0 0 l 11 5 l -11 5 z"
-							fill="context-stroke"
-						/>
-					</marker>
-					<marker
-						id="arrow-wide"
-						viewBox="0 0 11 15"
-						refX="0"
-						refY="7.5"
-						markerWidth="10.5"
-						markerHeight="15"
-						orient="auto-start-reverse"
-						markerUnits="userSpaceOnUse"
-					>
-						<path
-							d="M 0 0 l 11 7.5 l -11 7.5 z"
-							fill="context-stroke"
-						/>
-					</marker>
-				</defs>
-				<g
-					transform={
-						`translate(${page.view.offset.x}, ${page.view.offset.y}) ` +
-						`scale(${page.view.scale})`
+			<div class="canvas-area" bind:this={canvasArea}>
+				<!--
+					The grid is its own element rather than the background of the canvas.
+					These are custom properties, and changing one invalidates the style of
+					everything underneath the element it is set on - which, on the canvas,
+					is every node and belt on the page. Paired with the pan and zoom changing
+					in the same frame, that alone was the difference between 44 and 60 frames
+					a second on a page with a few hundred machines. Nothing is under this one.
+				-->
+				<div
+					class="graph-grid"
+					style={
+						`--offset-x: ${page.view.offset.x - gridSize/2 * page.view.scale}px;\n` +
+						`--offset-y: ${page.view.offset.y - gridSize/2 * page.view.scale}px;\n` +
+						`--square-size: ${page.view.scale * gridSize}px;`
 					}
-					bind:this={svgTopGroup}
+				></div>
+				<svg
+					class="graph-page-view"
+					width="100%"
+					height="100%"
+					bind:this={svg}
+					{...listeners}
 				>
-					{#each page.edges as [id, edge] (id)}
-						<EdgeView {edge} />
-					{/each}
-					{#each sortedNodes as [id, node] (id)}
-						<NodeView {node} />
-					{/each}
+					<defs>
+						<marker
+							id="arrow"
+							viewBox="0 0 11 10"
+							refX="0"
+							refY="5"
+							markerWidth="10.5"
+							markerHeight="10"
+							orient="auto-start-reverse"
+							markerUnits="userSpaceOnUse"
+						>
+							<path
+								d="M 0 0 l 11 5 l -11 5 z"
+								fill="context-stroke"
+							/>
+						</marker>
+						<marker
+							id="arrow-wide"
+							viewBox="0 0 11 15"
+							refX="0"
+							refY="7.5"
+							markerWidth="10.5"
+							markerHeight="15"
+							orient="auto-start-reverse"
+							markerUnits="userSpaceOnUse"
+						>
+							<path
+								d="M 0 0 l 11 7.5 l -11 7.5 z"
+								fill="context-stroke"
+							/>
+						</marker>
+					</defs>
+					<g
+						transform={
+							`translate(${page.view.offset.x}, ${page.view.offset.y}) ` +
+							`scale(${page.view.scale})`
+						}
+						bind:this={svgTopGroup}
+					>
+						{#each visibleEdges as [id, edge] (id)}
+							<EdgeView {edge} />
+						{/each}
+						{#each visibleNodes as [id, node] (id)}
+							<NodeView {node} />
+						{/each}
 
-					{#if selectionAreaRaw}
-						<rect
-							class="selection-area"
-							x={selectionArea!.x}
-							y={selectionArea!.y}
-							width={selectionArea!.width}
-							height={selectionArea!.height}
-							transition:fade={{ duration: 100 }}
-						/>
-					{/if}
+						{#if selectionAreaRaw}
+							<rect
+								class="selection-area"
+								x={selectionArea!.x}
+								y={selectionArea!.y}
+								width={selectionArea!.width}
+								height={selectionArea!.height}
+								transition:fade={{ duration: 100 }}
+							/>
+						{/if}
 
-					<CursorOverlay {page} {serverConnection} />
-				</g>
-			</svg>
+						<CursorOverlay {page} {serverConnection} />
+					</g>
+				</svg>
+			</div>
 		{/snippet}
 	</UserEvents>
 
@@ -590,8 +764,34 @@
 		height: 100%;
 	}
 
+	// Holds the grid and the canvas together, so "fill this" means the canvas and not
+	// the whole page, which has the toolbar above it.
+	.canvas-area {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		// Keeps the stacking of the grid and the canvas to themselves. Without this the
+		// canvas being lifted above the grid also lifts it above the overlay layer that
+		// sits over the whole app, and clicking the page stops reaching it - which shows
+		// up as menus that will not go away.
+		isolation: isolate;
+	}
+
 	.graph-page-view {
 		flex: 1;
+		background-color: transparent;
+		// Positioned so it stacks above the grid, which is positioned and would
+		// otherwise paint over it.
+		position: relative;
+		z-index: 1;
+	}
+
+	.graph-grid {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		pointer-events: none;
 		background-image: var(--grid-background-image);
 		background-color: var(--grid-background-color);
 		background-position: var(--offset-x) var(--offset-y);

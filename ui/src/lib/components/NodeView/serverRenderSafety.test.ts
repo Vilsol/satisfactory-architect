@@ -19,6 +19,14 @@ describe("components can be loaded without a browser", () => {
 		await expect(import("./NodeView.svelte")).resolves.toBeDefined();
 	});
 
+	test("the label drawn on a belt, which measures its own text", async () => {
+		await expect(import("../EdgeAnnotation.svelte")).resolves.toBeDefined();
+	});
+
+	test("the belt view it belongs to", async () => {
+		await expect(import("../EdgeView/EdgeView.svelte")).resolves.toBeDefined();
+	});
+
 	test("the settings page", async () => {
 		await expect(import("../OverlayLayer/SettingsOverlay.svelte")).resolves.toBeDefined();
 	});

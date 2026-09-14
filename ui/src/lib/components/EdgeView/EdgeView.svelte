@@ -11,7 +11,7 @@
 	import { userCanChangeOrientationVector } from "../../datamodel/nodeTypeProperties.svelte";
 	import UserEvents, { type DragEvent } from "../UserEvents.svelte";
 	import type { LayoutOrientation } from "../../datamodel/GraphNode.svelte";
-	import { edgeArrowLength, gridSize } from "$lib/datamodel/constants";
+	import { edgeArrowLength, gridSize, splitterMergerNodeRadius } from "$lib/datamodel/constants";
 	import EdgeAnnotation from "../EdgeAnnotation.svelte";
 
 	interface Props {
@@ -323,6 +323,58 @@
 		}
 	}
 
+	/**
+	 * Pulling the belt's middle out to put a splitter or merger into it.
+	 *
+	 * Nothing is changed while the drag is happening - what is drawn is only a preview,
+	 * so letting go somewhere silly, or dismissing the menu, costs nothing.
+	 */
+	let insertPoint: IVector2D|null = $state(null);
+	/** Where the belt was taken hold of, which is anywhere along it. */
+	let insertFrom: IVector2D|null = null;
+
+	function onInsertDragStart(e: DragEvent) {
+		insertFrom = page.screenToPageCoords({x: e.cursorEvent.clientX, y: e.cursorEvent.clientY});
+		insertPoint = insertFrom;
+	}
+
+	function onInsertDrag(e: DragEvent) {
+		insertPoint = page.screenToPageCoords({x: e.cursorEvent.clientX, y: e.cursorEvent.clientY});
+	}
+
+	function onInsertDragEnd(e: DragEvent) {
+		const dropPoint = insertPoint;
+		const grabPoint = insertFrom;
+		insertPoint = null;
+		insertFrom = null;
+		if (!dropPoint || !grabPoint) {
+			return;
+		}
+		// A short drag is someone nudging the belt while clicking it, not asking for a
+		// node. Same distance as dragging a new building out of a joint.
+		const dragged = Math.hypot(dropPoint.x - grabPoint.x, dropPoint.y - grabPoint.y);
+		if (dragged < gridSize) {
+			return;
+		}
+		eventStream.emit({
+			type: "showContextMenu",
+			x: e.cursorEvent.clientX,
+			y: e.cursorEvent.clientY,
+			items: [
+				{
+					label: "Splitter",
+					icon: "splitter",
+					onClick: () => page.splitEdge(edge, "splitter", dropPoint),
+				},
+				{
+					label: "Merger",
+					icon: "merger",
+					onClick: () => page.splitEdge(edge, "merger", dropPoint),
+				},
+			],
+		});
+	}
+
 	let edgeDragStartValue: number|undefined;
 	function onEdgeDrag(e: DragEvent, type: "horizontal"|"vertical", index: number) {
 		const delta = type === "horizontal" ? e.totalDeltaY : e.totalDeltaX;
@@ -358,10 +410,26 @@
 	style="--edge-color: {color};"
 >
 	{#if pathD}
-		<path
-			class="edge-view-hover-area"
-			d={pathD}
-		/>
+		<!--
+			The belt itself is what you pull a splitter out of. This sits under the
+			handles for rotating an end and for nudging a straight run sideways, so
+			those keep the parts of the belt they are drawn on.
+		-->
+		<UserEvents
+			onDragStart={onInsertDragStart}
+			onDrag={onInsertDrag}
+			onDragEnd={onInsertDragEnd}
+			dragStartThreshold={4}
+			id="edge {edge.id} insert node along belt"
+		>
+			{#snippet children({ listeners })}
+				<path
+					{...listeners}
+					class="edge-view-hover-area"
+					d={pathD}
+				/>
+			{/snippet}
+		</UserEvents>
 		{#if remoteSelector}
 			<path
 				class="remote-selection-path"
@@ -431,6 +499,44 @@
 			</UserEvents>
 		{/if}
 	{/each}
+	{#if insertPoint && edge.startNodePosition && edge.endNodePosition}
+		<g class="insert-preview">
+			<line
+				x1={edge.startNodePosition.x}
+				y1={edge.startNodePosition.y}
+				x2={insertPoint.x}
+				y2={insertPoint.y}
+			/>
+			<line
+				x1={insertPoint.x}
+				y1={insertPoint.y}
+				x2={edge.endNodePosition.x}
+				y2={edge.endNodePosition.y}
+			/>
+			<circle cx={insertPoint.x} cy={insertPoint.y} r={splitterMergerNodeRadius} />
+		</g>
+	{/if}
+	{#if midPoint}
+		<!-- A belt with nothing flowing through it still deserves a splitter, so this
+		     does not depend on there being a rate to show. -->
+		<UserEvents
+			onDragStart={onInsertDragStart}
+			onDrag={onInsertDrag}
+			onDragEnd={onInsertDragEnd}
+			dragStartThreshold={4}
+			id="edge {edge.id} insert node"
+		>
+			{#snippet children({ listeners })}
+				<circle
+					{...listeners}
+					class="insert-handle"
+					cx={midPoint.x}
+					cy={midPoint.y}
+					r="12"
+				/>
+			{/snippet}
+		</UserEvents>
+	{/if}
 	{#if midPoint && edge.flow !== 0}
 		<EdgeAnnotation
 			x={midPoint.x}
@@ -465,6 +571,30 @@
 </g>
 
 <style lang="scss">
+	// Invisible, but it is what you grab to pull a splitter out of the belt.
+	.insert-handle {
+		fill: transparent;
+		cursor: grab;
+	}
+
+	.insert-preview {
+		pointer-events: none;
+
+		line {
+			stroke: var(--edge-stroke-color);
+			stroke-width: 2;
+			stroke-dasharray: 5 4;
+			opacity: 0.7;
+		}
+
+		circle {
+			fill: var(--node-background-color);
+			stroke: var(--node-border-selected-color);
+			stroke-width: 2;
+			stroke-dasharray: 4 3;
+		}
+	}
+
 	path {
 		fill: none;
 	}
@@ -472,6 +602,7 @@
 	.edge-view-hover-area {
 		stroke: transparent;
 		stroke-width: 10;
+		cursor: grab;
 	}
 	
 	// Somebody else in the room has this picked out, drawn under the belt in their

@@ -423,6 +423,49 @@
 		};
 	}
 
+
+	/**
+	 * Watching the window, because a drag carries on over whatever the pointer happens
+	 * to be above and ends wherever it is let go.
+	 *
+	 * Attached only while there is something to watch for. Every draggable thing on the
+	 * page has one of these, so declaring them up front put several thousand listeners
+	 * on the window of a page with a few hundred buildings - each one woken by every
+	 * mouse move only to find it had nothing to do. Each handler already did nothing
+	 * unless this one was dragging, so this changes when they are attached, not what
+	 * they do. `isDragging` is set while the mousedown is still being handled, so the
+	 * listeners are in place before the first move can arrive.
+	 */
+	$effect(() => {
+		const wanted: [string, EventListener, AddEventListenerOptions?][] = [];
+		if (isDragging || onCursorMove) {
+			wanted.push(["mousemove", handleMouseMove as EventListener]);
+			wanted.push(["touchmove", handleTouchMove as EventListener, { passive: false }]);
+		}
+		if (isDragging || onWindowCursorUp) {
+			wanted.push(["mouseup", handleMouseUp as EventListener]);
+			wanted.push(["touchend", handleTouchEnd as EventListener]);
+			wanted.push(["touchcancel", handleTouchEnd as EventListener]);
+		}
+		if (isDragging || onKeyDown) {
+			wanted.push(["keydown", handleKeyDown as EventListener]);
+		}
+		if (onWindowClick) {
+			wanted.push(["click", handleWindowClick as EventListener]);
+		}
+		if (wanted.length === 0) {
+			return;
+		}
+		for (const [name, fn, options] of wanted) {
+			window.addEventListener(name, fn, options);
+		}
+		return () => {
+			for (const [name, fn, options] of wanted) {
+				window.removeEventListener(name, fn, options);
+			}
+		};
+	});
+
 	const listeners = $derived({
 		onmousedown: onDrag || onCursorDown ? handleMouseDown : undefined,
 		ontouchstart: onDrag || onCursorDown ? handleTouchStart : undefined,
@@ -435,12 +478,3 @@
 
 {@render children({ listeners, isDragging })}
 
-<svelte:window
-	onmousemove={onDrag || onCursorMove ? handleMouseMove : undefined}
-	onmouseup={onDrag || onWindowCursorUp ? handleMouseUp : undefined}
-	on:touchmove|nonpassive={onDrag || onZoom || onCursorMove ? handleTouchMove : undefined}
-	ontouchend={onDrag || onWindowCursorUp ? handleTouchEnd : undefined}
-	ontouchcancel={onDrag || onWindowCursorUp ? handleTouchEnd : undefined}
-	onkeydown={onDrag || onKeyDown ? handleKeyDown : undefined}
-	onclick={onWindowClick ? handleWindowClick : undefined}
-/>

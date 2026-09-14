@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from "svelte";
+	import { measureTextWidth } from "./textWidth";
 
 	interface Props {
 		x: number;
@@ -29,8 +29,14 @@
 		onClick,
 	}: Props = $props();
 
-	let textElement: SVGTextElement | undefined = $state();
-	let bbox = $state({ width: 0, height: 0 });
+	/**
+	 * How wide the text will be drawn.
+	 *
+	 * Worked out rather than measured off the page: asking the element makes the browser
+	 * lay everything out then and there, and there are a couple of hundred of these on a
+	 * decent sized factory.
+	 */
+	const textWidth = $derived(measureTextWidth(text, fontSize, fontWeight));
 
 	const textAnchor = $derived.by(() => {
 		if (align === "left") return "start";
@@ -42,8 +48,8 @@
 
 	const rectX = $derived.by(() => {
 		if (align === "left") return x;
-		if (align === "right") return x - bbox.width - paddingX * 2;
-		return x - bbox.width / 2 - paddingX;
+		if (align === "right") return x - textWidth - paddingX * 2;
+		return x - textWidth / 2 - paddingX;
 	});
 
 	const textX = $derived.by(() => {
@@ -53,21 +59,8 @@
 	});
 
 	const rectY = $derived(y - fixedHeight / 2);
-	const rectWidth = $derived(bbox.width + paddingX * 2);
+	const rectWidth = $derived(textWidth + paddingX * 2);
 	const rectHeight = fixedHeight;
-
-	$effect(() => {
-		void text;
-		void fontSize;
-		void fontWeight;
-		
-		untrack(() => {
-			if (textElement) {
-				const box = textElement.getBBox();
-				bbox = { width: box.width, height: box.height };
-			}
-		});
-	});
 
 	function handleClick(e: MouseEvent | TouchEvent) {
 		if (onClick) {
@@ -94,7 +87,6 @@
 		fill={color}
 	/>
 	<text
-		bind:this={textElement}
 		x={textX}
 		{y}
 		text-anchor={textAnchor}

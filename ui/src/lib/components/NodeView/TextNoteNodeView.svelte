@@ -2,7 +2,7 @@
 	import { settings } from "$lib/settings.svelte";
 	import { isNodeSelectable } from "../../datamodel/nodeTypeProperties.svelte";
 	import type { GraphNode, GraphNodeTextNoteProperties } from "../../datamodel/GraphNode.svelte";
-	import { shouldApplyIncomingNote } from "../../datamodel/noteContent";
+	import { noteContentToSafeHtml, shouldApplyIncomingNote } from "../../datamodel/noteContent";
 	import { applyNoteContent } from "./noteEditor";
 	// Quill reaches for `document` as soon as it is imported, and this page is
 	// prerendered on a server that has none. It is pulled in after mount instead, which
@@ -40,6 +40,9 @@
 	 */
 	let lastApplied: string|null = null;
 
+	/** What a note looks like before anybody has asked to edit it. */
+	const shownHtml = $derived(noteContentToSafeHtml(node.properties.content));
+
 	function updateSize() {
 		if (!div) return;
 		const rect = div.getBoundingClientRect();
@@ -48,11 +51,30 @@
 		node.size.y = rect.height / scale;
 	}
 
-	$effect(() => {
-		const host = editorHost;
-		if (!host || quill) {
+	/**
+	 * Whether this note has a real editor yet.
+	 *
+	 * Until somebody clicks into it, a note is drawn as plain text. Building the editor
+	 * is by far the most expensive thing a note does - on a page with a dozen of them it
+	 * was about a fifth of the time to open the page - and it is wasted on every note
+	 * that is only being read.
+	 */
+	let wantsEditor = $state(false);
+	let building = false;
+
+	function beginEditing() {
+		if (quill || !isSelectable) {
 			return;
 		}
+		wantsEditor = true;
+	}
+
+	$effect(() => {
+		const host = editorHost;
+		if (!wantsEditor || !host || quill || building) {
+			return;
+		}
+		building = true;
 		let abandoned = false;
 		void (async () => {
 			const [{ default: Quill }] = await Promise.all([
@@ -60,9 +82,15 @@
 				import("quill/dist/quill.bubble.css"),
 			]);
 			if (abandoned || !editorHost) {
+				building = false;
 				return;
 			}
+			const host = editorHost;
 			startEditor(Quill, host);
+			// The click that asked for the editor cannot land in text that did not exist
+			// when it happened, so put the caret in afterwards.
+			(quill as QuillEditor | null)?.focus();
+			building = false;
 		})();
 		return () => {
 			abandoned = true;
@@ -126,7 +154,19 @@
 		setTimeout(updateSize, 0);
 	});
 
-	$effect(updateSize);
+	$effect(() => {
+		// Whatever could change how big the note is drawn.
+		void shownHtml;
+		void wantsEditor;
+		// Measuring makes the browser lay the page out then and there. Doing that while
+		// a few hundred other things are still being built holds all of them up, so it
+		// waits until there is a frame to look at. It cannot be skipped entirely on the
+		// grounds that the size is in the save: saves written before notes measured
+		// themselves properly carry the placeholder size, and those notes would be drawn
+		// in a box far too small for their text.
+		const scheduled = requestAnimationFrame(() => updateSize());
+		return () => cancelAnimationFrame(scheduled);
+	});
 </script>
 
 <g
@@ -149,8 +189,19 @@
 		height={node.size.y + TOOLBAR_ROOM * 2}
 	>
 		<div class="overflow-area" style="padding: {TOOLBAR_ROOM}px;">
-			<div class="content-wrapper" bind:this={div}>
-				<div class="content" bind:this={editorHost}></div>
+			<div
+				class="content-wrapper"
+				bind:this={div}
+				onpointerdown={beginEditing}
+			>
+				{#if wantsEditor}
+					<div class="content" bind:this={editorHost}></div>
+				{:else}
+					<!-- The editor's own class, so a note reads identically either way. -->
+					<div class="content ql-editor" class:is-empty={!shownHtml}>
+						{@html shownHtml}
+					</div>
+				{/if}
 			</div>
 		</div>
 	</foreignObject>

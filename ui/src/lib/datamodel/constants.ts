@@ -1,4 +1,4 @@
-export const latestAppVersion = 3;
+export const latestAppVersion = 4;
 export const dataModelVersion = 1;
 
 export const gridSize = 50;
@@ -35,6 +35,29 @@ export type ChangelogEntry = string | {
 };
 
 export const changelog: Record<number, ChangelogEntry[]> = {
+	4: [
+		{
+			text: "Splitters and mergers on a belt that is already there",
+			items: [
+				"Take hold of a belt anywhere along it, pull, and let go to drop a splitter or a merger into the middle of it",
+				"The belt becomes two with the new one between them, drawn the way it was",
+			],
+		},
+		{
+			text: "Much faster on big factories",
+			items: [
+				"Only what is on screen is drawn, so opening a page costs what you are looking at rather than what the whole factory costs",
+				"Pages with a few hundred machines open several times quicker than before",
+				"Panning and zooming hold a steady frame rate on them",
+			],
+		},
+		{
+			text: "Notes",
+			items: [
+				"A note becomes editable when you click into it, so a page full of them is no longer slow to open",
+			],
+		},
+	],
 	3: [
 		{
 			text: "Rates are worked out properly now",
