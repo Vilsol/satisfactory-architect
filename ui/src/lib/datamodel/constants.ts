@@ -1,4 +1,4 @@
-export const latestAppVersion = 5;
+export const latestAppVersion = 6;
 export const dataModelVersion = 1;
 
 export const gridSize = 50;
@@ -35,6 +35,18 @@ export type ChangelogEntry = string | {
 };
 
 export const changelog: Record<number, ChangelogEntry[]> = {
+	6: [
+		{
+			text: "What a recipe really costs",
+			items: [
+				"Compare Recipes now works out the whole chain under each option, down to the ore",
+				"Machines, power and raw materials for the lot, quoted per item a minute so the options line up",
+				"Pick the recipe to assume for any item, and everything above it is costed that way",
+				"Loops are worked out rather than given up on - recycled plastic and rubber feeding each other comes out to a number",
+				"Byproducts count against the cost by default; there is a switch if you would rather they did not",
+			],
+		},
+	],
 	5: [
 		{
 			text: "Buildings can be run faster or slower",

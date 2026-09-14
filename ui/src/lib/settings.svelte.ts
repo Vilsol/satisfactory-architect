@@ -98,6 +98,14 @@ export const settings = {
 		control: { type: "toggle" },
 	}),
 
+	creditByproducts: new Setting<boolean>({
+		key: "credit-byproducts",
+		label: "Count byproducts when costing recipes",
+		description: "Whether what a recipe makes on the side counts against what it costs.",
+		group: "Appearance",
+		defaultValue: true,
+		control: { type: "toggle" },
+	}),
 	defaultEdgeDisplayType: new Setting<GraphEdgeDisplayType>({
 		key: "default-edge-display-type",
 		label: "Belt style",
