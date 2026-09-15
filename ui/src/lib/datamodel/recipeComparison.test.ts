@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { comparableItemOf, isAlternateRecipe, recipesProducing } from "./recipeComparison";
+import { canCompareRecipes, comparableItemOf, isAlternateRecipe, recipesProducing } from "./recipeComparison";
 
 const INGOT = "Desc_IronIngot_C";
 const ORE = "Desc_OreIron_C";
@@ -119,5 +119,34 @@ describe("which item a node is about", () => {
 
 	test("a note is about nothing", () => {
 		expect(comparableItemOf({ type: "text-note", content: "" } as never)).toBeUndefined();
+	});
+});
+
+describe("when there is something to show", () => {
+	const factoryOutput = (partClassName: string) => ({
+		type: "production" as const,
+		details: { type: "factory-output" as const, partClassName },
+		multiplier: 5,
+		autoMultiplier: false,
+		resourceJoints: [],
+	});
+
+	test("an item made several ways is worth opening", () => {
+		expect(canCompareRecipes(factoryOutput(INGOT))).toBe(true);
+	});
+
+	test("an item made exactly one way is worth opening too, for what it costs", () => {
+		// Adaptive Control Unit has a single recipe. There is nothing to compare it
+		// against, but there is still a chain underneath it worth pricing.
+		expect(recipesProducing("Desc_SpaceElevatorPart_5_C")).toHaveLength(1);
+		expect(canCompareRecipes(factoryOutput("Desc_SpaceElevatorPart_5_C"))).toBe(true);
+	});
+
+	test("something nothing makes has nothing to show", () => {
+		expect(canCompareRecipes(factoryOutput("Desc_Wood_C"))).toBe(false);
+	});
+
+	test("a note has nothing to show", () => {
+		expect(canCompareRecipes({ type: "text-note", content: "" } as never)).toBe(false);
 	});
 });

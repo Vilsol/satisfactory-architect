@@ -64,7 +64,7 @@
 		{#if part}
 			<SfIconView icon={part.icon} quality="min" size={28} />
 		{/if}
-		<span>Ways to make {itemName}</span>
+		<span>{options.length === 1 ? `What ${itemName} costs` : `Ways to make ${itemName}`}</span>
 	</div>
 
 	<label class="credit-toggle">
@@ -180,7 +180,9 @@
 	</div>
 
 	<div class="footnote">
-		Everything is per one {itemName} a minute, so recipes of different sizes line up.
+		{options.length === 1
+			? `Everything is per one ${itemName} a minute.`
+			: `Everything is per one ${itemName} a minute, so recipes of different sizes line up.`}
 	</div>
 </div>
 

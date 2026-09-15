@@ -116,3 +116,14 @@ export function comparableItemOf(properties: GraphNodeProperties): string | unde
 			return undefined;
 	}
 }
+
+/**
+ * Whether the comparison panel has anything to say about a node.
+ *
+ * One recipe counts. There is nothing to weigh it against, but the panel prices the
+ * whole chain underneath it, and that is worth reading on its own.
+ */
+export function canCompareRecipes(properties: GraphNodeProperties): boolean {
+	const itemClass = comparableItemOf(properties);
+	return itemClass !== undefined && recipesProducing(itemClass).length > 0;
+}

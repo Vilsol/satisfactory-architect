@@ -2,7 +2,7 @@
 	import { getContext, onDestroy, onMount } from "svelte";
 	import UserEvents, { type CursorEvent, type DragEvent } from "../UserEvents.svelte";
 	import { jointRate, machinesToMatch } from "../../datamodel/jointRates";
-	import { comparableItemOf, recipesProducing } from "../../datamodel/recipeComparison";
+	import { canCompareRecipes, comparableItemOf } from "../../datamodel/recipeComparison";
 	import { isNodeSelectable, isNodeDraggable, isNodeDeletable, getNodeRadius, isResourceNodeSplittable } from "../../datamodel/nodeTypeProperties.svelte";
 	import ResourceJointNodeView from "./ResourceJointNodeView.svelte";
 	import type { ContextMenuItem, EventStream } from "$lib/EventStream.svelte";
@@ -158,9 +158,9 @@
 				onClick: startNewOutgoingConnection,
 			});
 		}
-		// Whatever this node is a way of making, so the alternatives can be looked at.
+		// Whatever this node is a way of making, so it can be looked into.
 		const comparableItem = comparableItemOf(node.properties);
-		if (comparableItem && recipesProducing(comparableItem).length > 1) {
+		if (comparableItem && canCompareRecipes(node.properties)) {
 			items.push({
 				label: "Compare Recipes",
 				icon: "branch",
